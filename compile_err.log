@@ -1,0 +1,61 @@
+[ERROR] COMPILATION ERROR : 
+[ERROR] /D:/sab/orca/backend/src/main/java/org/example/backend/controller/AuthController.java:[58,27] cannot find symbol
+[ERROR] /D:/sab/orca/backend/src/main/java/org/example/backend/controller/AuthController.java:[60,29] cannot find symbol
+[ERROR] /D:/sab/orca/backend/src/main/java/org/example/backend/controller/AuthController.java:[61,31] cannot find symbol
+[ERROR] /D:/sab/orca/backend/src/main/java/org/example/backend/controller/AuthController.java:[61,58] cannot find symbol
+[ERROR] /D:/sab/orca/backend/src/main/java/org/example/backend/service/AuthService.java:[37,52] cannot find symbol
+[ERROR] /D:/sab/orca/backend/src/main/java/org/example/backend/service/AuthService.java:[38,73] cannot find symbol
+[ERROR] /D:/sab/orca/backend/src/main/java/org/example/backend/service/AuthService.java:[42,25] cannot find symbol
+[ERROR] /D:/sab/orca/backend/src/main/java/org/example/backend/service/AuthService.java:[43,34] cannot find symbol
+[ERROR] /D:/sab/orca/backend/src/main/java/org/example/backend/service/AuthService.java:[44,57] cannot find symbol
+[ERROR] /D:/sab/orca/backend/src/main/java/org/example/backend/service/AuthService.java:[54,64] cannot find symbol
+[ERROR] /D:/sab/orca/backend/src/main/java/org/example/backend/service/AuthService.java:[64,32] cannot find symbol
+[ERROR] /D:/sab/orca/backend/src/main/java/org/example/backend/service/AuthService.java:[65,32] cannot find symbol
+[ERROR] /D:/sab/orca/backend/src/main/java/org/example/backend/service/AuthService.java:[73,64] cannot find symbol
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.13.0:compile (default-compile) on project backend: Compilation failure: Compilation failure: 
+[ERROR] /D:/sab/orca/backend/src/main/java/org/example/backend/controller/AuthController.java:[58,27] cannot find symbol
+[ERROR]   symbol:   method getId()
+[ERROR]   location: variable user of type org.example.backend.entity.User
+[ERROR] /D:/sab/orca/backend/src/main/java/org/example/backend/controller/AuthController.java:[60,29] cannot find symbol
+[ERROR]   symbol:   method getRole()
+[ERROR]   location: variable user of type org.example.backend.entity.User
+[ERROR] /D:/sab/orca/backend/src/main/java/org/example/backend/controller/AuthController.java:[61,31] cannot find symbol
+[ERROR]   symbol:   method getChipId()
+[ERROR]   location: variable user of type org.example.backend.entity.User
+[ERROR] /D:/sab/orca/backend/src/main/java/org/example/backend/controller/AuthController.java:[61,58] cannot find symbol
+[ERROR]   symbol:   method getChipId()
+[ERROR]   location: variable user of type org.example.backend.entity.User
+[ERROR] /D:/sab/orca/backend/src/main/java/org/example/backend/service/AuthService.java:[37,52] cannot find symbol
+[ERROR]   symbol:   method getUsername()
+[ERROR]   location: variable request of type org.example.backend.dto.RegisterRequest
+[ERROR] /D:/sab/orca/backend/src/main/java/org/example/backend/service/AuthService.java:[38,73] cannot find symbol
+[ERROR]   symbol:   method getUsername()
+[ERROR]   location: variable request of type org.example.backend.dto.RegisterRequest
+[ERROR] /D:/sab/orca/backend/src/main/java/org/example/backend/service/AuthService.java:[42,25] cannot find symbol
+[ERROR]   symbol:   method builder()
+[ERROR]   location: class org.example.backend.entity.User
+[ERROR] /D:/sab/orca/backend/src/main/java/org/example/backend/service/AuthService.java:[43,34] cannot find symbol
+[ERROR]   symbol:   method getUsername()
+[ERROR]   location: variable request of type org.example.backend.dto.RegisterRequest
+[ERROR] /D:/sab/orca/backend/src/main/java/org/example/backend/service/AuthService.java:[44,57] cannot find symbol
+[ERROR]   symbol:   method getPassword()
+[ERROR]   location: variable request of type org.example.backend.dto.RegisterRequest
+[ERROR] /D:/sab/orca/backend/src/main/java/org/example/backend/service/AuthService.java:[54,64] cannot find symbol
+[ERROR]   symbol:   method getRole()
+[ERROR]   location: variable user of type org.example.backend.entity.User
+[ERROR] /D:/sab/orca/backend/src/main/java/org/example/backend/service/AuthService.java:[64,32] cannot find symbol
+[ERROR]   symbol:   method getUsername()
+[ERROR]   location: variable request of type org.example.backend.dto.LoginRequest
+[ERROR] /D:/sab/orca/backend/src/main/java/org/example/backend/service/AuthService.java:[65,32] cannot find symbol
+[ERROR]   symbol:   method getPassword()
+[ERROR]   location: variable request of type org.example.backend.dto.LoginRequest
+[ERROR] /D:/sab/orca/backend/src/main/java/org/example/backend/service/AuthService.java:[73,64] cannot find symbol
+[ERROR]   symbol:   method getRole()
+[ERROR]   location: variable user of type org.example.backend.entity.User
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException
