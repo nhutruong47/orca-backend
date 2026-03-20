@@ -26,7 +26,7 @@ public class ChatMessage {
     @JoinColumn(name = "recipient_id")
     private User recipient;
 
-    @Column(nullable = false, columnDefinition = "NVARCHAR(MAX)")
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 
     @Column(name = "created_at", nullable = false, updatable = false)
