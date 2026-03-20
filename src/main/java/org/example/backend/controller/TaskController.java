@@ -39,6 +39,16 @@ public class TaskController {
         return ResponseEntity.ok(taskService.getMemberKpi(user.getId()));
     }
 
+    @GetMapping("/member/{memberId}")
+    public ResponseEntity<List<TaskDTO>> getByMember(@PathVariable UUID memberId) {
+        return ResponseEntity.ok(taskService.getByMember(memberId));
+    }
+
+    @GetMapping("/member/{memberId}/kpi")
+    public ResponseEntity<?> getMemberKpi(@PathVariable UUID memberId) {
+        return ResponseEntity.ok(taskService.getMemberKpi(memberId));
+    }
+
     @PostMapping
     public ResponseEntity<?> create(@RequestBody TaskDTO dto) {
         try {
@@ -78,6 +88,11 @@ public class TaskController {
     // === Checklist ===
     @GetMapping("/{id}/checklists")
     public ResponseEntity<?> getChecklist(@PathVariable UUID id) {
+        return ResponseEntity.ok(taskService.getChecklist(id));
+    }
+
+    @GetMapping("/{id}/checklist")
+    public ResponseEntity<?> getChecklistAlias(@PathVariable UUID id) {
         return ResponseEntity.ok(taskService.getChecklist(id));
     }
 

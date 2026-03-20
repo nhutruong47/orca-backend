@@ -20,7 +20,7 @@ public class Notification {
     @Column(nullable = false, length = 200)
     private String title;
 
-    @Column(nullable = false, columnDefinition = "NVARCHAR(MAX)")
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String message;
 
     /** TASK_ASSIGNED, TASK_ACCEPTED, TASK_REJECTED */

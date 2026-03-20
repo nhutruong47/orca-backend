@@ -24,8 +24,7 @@ public class Task {
     @Column(nullable = false, length = 500)
     private String title;
 
-    @org.hibernate.annotations.Nationalized
-    @Column(columnDefinition = "NVARCHAR(MAX)")
+    @Column(columnDefinition = "TEXT")
     private String description;
 
     private Integer priority = 1; // 1-5

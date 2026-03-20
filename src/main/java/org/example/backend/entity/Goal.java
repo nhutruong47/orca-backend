@@ -24,16 +24,13 @@ public class Goal {
     @Column(nullable = false, length = 500)
     private String title;
 
-    @org.hibernate.annotations.Nationalized
-    @Column(name = "output_target", columnDefinition = "NVARCHAR(MAX)")
+    @Column(name = "output_target", columnDefinition = "TEXT")
     private String outputTarget; // e.g. "3 tấn cà phê"
 
-    @org.hibernate.annotations.Nationalized
-    @Column(name = "raw_instruction", columnDefinition = "NVARCHAR(MAX)")
+    @Column(name = "raw_instruction", columnDefinition = "TEXT")
     private String rawInstruction;
 
-    @org.hibernate.annotations.Nationalized
-    @Column(name = "ai_parsed_data", columnDefinition = "NVARCHAR(MAX)")
+    @Column(name = "ai_parsed_data", columnDefinition = "TEXT")
     private String aiParsedData;
 
     private Integer priority = 1;
@@ -49,8 +46,7 @@ public class Goal {
     @Column(name = "completed_tasks")
     private Integer completedTasks = 0;
 
-    @org.hibernate.annotations.Nationalized
-    @Column(name = "chat_log", columnDefinition = "NVARCHAR(MAX)")
+    @Column(name = "chat_log", columnDefinition = "TEXT")
     private String chatLog;
 
     @Column(name = "created_at", nullable = false, updatable = false)
