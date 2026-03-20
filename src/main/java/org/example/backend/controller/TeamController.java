@@ -84,6 +84,18 @@ public class TeamController {
         return ResponseEntity.ok().build();
     }
 
+    /** Cập nhật nhãn công việc của thành viên */
+    @PutMapping("/{teamId}/members/{userId}/labels")
+    public ResponseEntity<List<String>> updateMemberLabels(
+            @PathVariable UUID teamId,
+            @PathVariable UUID userId,
+            @RequestBody Map<String, List<String>> body,
+            Authentication auth) {
+        List<String> labels = body.getOrDefault("labels", List.of());
+        List<String> updatedLabels = teamService.updateMemberLabels(teamId, userId, labels, auth.getName());
+        return ResponseEntity.ok(updatedLabels);
+    }
+
     /** Xóa nhóm (chỉ Owner) */
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteTeam(@PathVariable UUID id, Authentication auth) {

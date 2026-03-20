@@ -1,0 +1,5 @@
+=== DB DIAGNOSTICS ===
+Goal count: 22
+Task count: 79
+
+--- GOALS ---

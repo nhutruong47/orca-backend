@@ -33,6 +33,7 @@ public class TeamDTO {
         private String fullName;
         private String groupRole; // ADMIN / MEMBER
         private String joinedAt;
+        private List<String> jobLabels;
         private int totalTasks;
         private int completedTasks;
         private int completionRate;
@@ -75,6 +76,14 @@ public class TeamDTO {
 
         public void setJoinedAt(String joinedAt) {
             this.joinedAt = joinedAt;
+        }
+
+        public List<String> getJobLabels() {
+            return jobLabels;
+        }
+
+        public void setJobLabels(List<String> jobLabels) {
+            this.jobLabels = jobLabels;
         }
 
         public int getTotalTasks() {

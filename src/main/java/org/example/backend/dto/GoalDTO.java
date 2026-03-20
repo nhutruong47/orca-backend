@@ -20,8 +20,16 @@ public class GoalDTO {
     private LocalDateTime createdAt;
     private Boolean useAi;
     private String chatLog;
+    private java.util.List<java.util.Map<String, Object>> tasks;
 
     // === Getters & Setters ===
+    public java.util.List<java.util.Map<String, Object>> getTasks() {
+        return tasks;
+    }
+
+    public void setTasks(java.util.List<java.util.Map<String, Object>> tasks) {
+        this.tasks = tasks;
+    }
     public String getId() {
         return id;
     }

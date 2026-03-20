@@ -171,6 +171,29 @@ public class TeamService {
     }
 
     /**
+     * Cập nhật danh sách nhãn dán (Job Labels) cho thành viên (chỉ Owner/Admin).
+     */
+    @Transactional
+    public List<String> updateMemberLabels(UUID teamId, UUID userId, List<String> labels, String requesterUsername) {
+        Team team = teamRepository.findById(teamId)
+                .orElseThrow(() -> new RuntimeException("Team not found"));
+
+        User requester = userRepository.findByUsername(requesterUsername)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        // Yêu cầu quyền ADMIN
+        checkAdminRole(team, requester);
+
+        TeamMember tm = teamMemberRepository.findByTeamIdAndUserId(teamId, userId)
+                .orElseThrow(() -> new RuntimeException("Member not found in group"));
+
+        // Cập nhật nhãn và lưu
+        tm.setJobLabels(labels);
+        teamMemberRepository.save(tm);
+
+        return tm.getJobLabels();
+    }
+
+    /**
      * Xóa nhóm (chỉ Owner)
      */
     @Transactional
@@ -290,6 +313,7 @@ public class TeamService {
                 mi.setFullName(tm.getUser().getFullName());
                 mi.setGroupRole(tm.getGroupRole().name());
                 mi.setJoinedAt(tm.getJoinedAt().toString());
+                mi.setJobLabels(tm.getJobLabels());
 
                 // Task stats mặc định = 0, sẽ được tính riêng khi cần
                 mi.setTotalTasks(0);

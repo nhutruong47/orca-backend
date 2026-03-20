@@ -65,21 +65,26 @@ public class GoalService {
 
         Goal saved = goalRepo.save(g);
 
-        // Kiểm tra: user chọn AI chia task VÀ trial còn hạn
+        List<Map<String, Object>> generatedTasks = dto.getTasks();
         boolean wantAi = dto.getUseAi() != null && dto.getUseAi();
-        System.out.println("=== CREATE GOAL === useAi from DTO: " + dto.getUseAi() + " | wantAi: " + wantAi
-                + " | trialActive: " + currentUser.isAiTrialActive());
-        if (wantAi && currentUser.isAiTrialActive()) {
-            // CÒN HẠN → Gọi AI chia task
-            List<String> memberNames = teamMemberRepo.findByTeamId(team.getId()).stream()
-                    .map(tm -> tm.getUser().getUsername())
-                    .collect(Collectors.toList());
+
+        if ((generatedTasks == null || generatedTasks.isEmpty()) && wantAi && currentUser.isAiTrialActive()) {
+            // ONLY re-generate if no explicit tasks list was provided from the frontend preview
+            List<TeamMember> teamMembers = teamMemberRepo.findByTeamId(team.getId());
+            Map<String, List<String>> memberLabels = new java.util.LinkedHashMap<>();
+            List<String> memberNames = new ArrayList<>();
+            for (TeamMember tm : teamMembers) {
+                String name = tm.getUser().getUsername();
+                memberNames.add(name);
+                memberLabels.put(name, tm.getJobLabels() != null ? tm.getJobLabels() : Collections.emptyList());
+            }
 
             AiParseResult parseResult = aiServiceClient.generateTaskPlan(
                     dto.getOutputTarget(),
                     dto.getDeadline() != null ? dto.getDeadline() : "",
                     saved.getPriority(),
-                    memberNames);
+                    team.getId(),
+                    memberLabels);
 
             try {
                 com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
@@ -88,8 +93,19 @@ public class GoalService {
                 System.err.println("Lỗi lưu JSON aiParsedData: " + e.getMessage());
             }
 
-            List<Map<String, Object>> generatedTasks = parseResult.getTasks() != null ? parseResult.getTasks() : new ArrayList<>();
+            generatedTasks = parseResult.getTasks() != null ? parseResult.getTasks() : new ArrayList<>();
+        } else if (generatedTasks != null && !generatedTasks.isEmpty()) {
+            System.out.println("✅ Using explicitly passed approved tasks count: " + generatedTasks.size());
+        } else {
+            generatedTasks = new ArrayList<>();
+        }
+        
+        List<String> memberNames = teamMemberRepo.findByTeamId(team.getId()).stream()
+                .map(tm -> tm.getUser().getUsername())
+                .collect(Collectors.toList());
 
+
+        if (!generatedTasks.isEmpty()) {
             // Tạo tasks từ AI plan
             int taskCount = 0;
             int memberIndex = 0;
@@ -125,11 +141,22 @@ public class GoalService {
                 task.setDeadline(parsedDeadline);
                 task.setStatus("PENDING");
 
-                // Phân công (Assignee): Trải đều cho các thành viên trong nhóm
-                if (!memberNames.isEmpty()) {
-                    String assignee = memberNames.get(memberIndex % memberNames.size());
-                    userRepo.findByUsername(assignee).ifPresent(task::setMember);
+                // Phân công (Assignee): Ưu tiên tên AI chỉ định, fallback round-robin
+                String aiAssignee = (String) tp.get("assignee");
+                boolean assigned = false;
+                if (aiAssignee != null && !aiAssignee.isEmpty()) {
+                    Optional<User> matchedUser = userRepo.findByUsernameIgnoreCase(aiAssignee.trim());
+                    if (matchedUser.isPresent()) {
+                        task.setMember(matchedUser.get());
+                        assigned = true;
+                        System.out.println("✅ AI giao task '" + task.getTitle() + "' cho: " + aiAssignee);
+                    }
+                }
+                if (!assigned && !memberNames.isEmpty()) {
+                    String fallback = memberNames.get(memberIndex % memberNames.size());
+                    userRepo.findByUsername(fallback).ifPresent(task::setMember);
                     memberIndex++;
+                    System.out.println("⚠️ Fallback round-robin giao task '" + task.getTitle() + "' cho: " + fallback);
                 }
 
                 taskRepo.save(task);

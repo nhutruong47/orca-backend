@@ -1,0 +1,1 @@
+Error: org.springframework.dao.DataIntegrityViolationException: Could not extract column [3] from JDBC ResultSet [The conversion from text to NCHAR is unsupported.] [n/a]; SQL [n/a]

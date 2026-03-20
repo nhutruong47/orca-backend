@@ -2,6 +2,8 @@ package org.example.backend.entity;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -24,6 +26,11 @@ public class TeamMember {
     @Enumerated(EnumType.STRING)
     @Column(name = "group_role", nullable = false)
     private GroupRole groupRole = GroupRole.MEMBER;
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "team_member_labels", joinColumns = @JoinColumn(name = "team_member_id"))
+    @Column(name = "label")
+    private List<String> jobLabels = new ArrayList<>();
 
     @Column(name = "joined_at", nullable = false, updatable = false)
     private LocalDateTime joinedAt;
@@ -71,5 +78,13 @@ public class TeamMember {
 
     public LocalDateTime getJoinedAt() {
         return joinedAt;
+    }
+
+    public List<String> getJobLabels() {
+        return jobLabels;
+    }
+
+    public void setJobLabels(List<String> jobLabels) {
+        this.jobLabels = jobLabels;
     }
 }
