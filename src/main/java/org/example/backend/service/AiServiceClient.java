@@ -228,8 +228,8 @@ public class AiServiceClient {
         AiParseResult result = new AiParseResult();
         result.setSource("regex");
         result.setTitle("Kế hoạch: " + text.substring(0, Math.min(text.length(), 50)));
-        result.setDescription("Hệ thống tự động biên dịch do AI Model gặp lỗi hoặc không khả dụng.");
-        result.setNeedsClarification(false);
+        result.setDescription("Chào anh/chị, hiện tại hệ thống AI đang tạm thời gián đoạn. Tuy nhiên, em vẫn ghi nhận yêu cầu của anh/chị và cần thêm một số thông tin để lập kế hoạch chính xác ạ.");
+        result.setNeedsClarification(true);
         return result;
     }
 }
