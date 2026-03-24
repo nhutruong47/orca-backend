@@ -87,10 +87,25 @@ public class AiServiceClient {
     }
 
     public AiParseResult parseTask(String text, java.util.UUID teamId, String memberContext, String historyContext) {
+        String inventoryContext = "";
+        if (teamId != null) {
+            List<InventoryItem> items = inventoryRepository.findByTeamIdOrderByLastUpdatedDesc(teamId);
+            if (!items.isEmpty()) {
+                StringBuilder sb = new StringBuilder();
+                sb.append("\n--- TÌNH TRẠNG KHO HIỆN TẠI ---\n");
+                for (InventoryItem item : items) {
+                    sb.append("- ").append(item.getName())
+                      .append(": ").append(item.getQuantity()).append(" ").append(item.getUnit()).append("\n");
+                }
+                sb.append("LƯU Ý QUAN TRỌNG: Nếu yêu cầu sản lượng VƯỢT QUÁ số lượng nguyên liệu có trong kho, BẠN PHẢI GHI CẢNH BÁO RÕ RÀNG vào đầu mục 'description' (VD: ⚠️ CẢNH BÁO: Trong kho chỉ còn ... không đủ nguyên liệu).\n\n");
+                inventoryContext = sb.toString();
+            }
+        }
+
         AiParseResult result = null;
         if (geminiApiKey != null && !geminiApiKey.isEmpty()) {
             try {
-                result = parseWithGemini(text, memberContext, historyContext);
+                result = parseWithGemini(text, memberContext, historyContext, inventoryContext);
             } catch (Exception e) {
                 logger.error("⚠️ Lỗi gọi Gemini: {}", e.getMessage(), e);
                 result = new AiParseResult();
@@ -118,7 +133,7 @@ public class AiServiceClient {
         return result;
     }
 
-    private AiParseResult parseWithGemini(String text, String memberContext, String historyContext) throws Exception {
+    private AiParseResult parseWithGemini(String text, String memberContext, String historyContext, String inventoryContext) throws Exception {
         String memberSection = "";
         if (memberContext != null && !memberContext.isEmpty()) {
             memberSection = "\n--- DANH SÁCH THÀNH VIÊN VÀ NHÃN DÁN CÔNG VIỆC ---\n"
@@ -148,6 +163,7 @@ public class AiServiceClient {
                 + "--- CONTEXT ---\n"
                 + memberSection
                 + historySection
+                + (inventoryContext != null ? inventoryContext : "")
                 + "Định dạng JSON Phản hồi (BẮT BUỘC):\n"
                 + "{\n"
                 + "  \"title\": \"Tên mục tiêu\",\n"
