@@ -178,8 +178,8 @@ public class AiServiceClient {
         // Bỏ responseMimeType để tránh lỗi 400
         requestBody.put("generationConfig", generationConfig);
 
-        // Chuyển sang API v1beta vì Google báo 404 trên v1
-        String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=" + geminiApiKey;
+        // Chuyển sang API v1beta và đổi tên model chuẩn xác nhất: gemini-1.5-flash (KHÔNG có chữ -latest)
+        String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + geminiApiKey;
         
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
