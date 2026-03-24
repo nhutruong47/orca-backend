@@ -92,7 +92,11 @@ public class AiServiceClient {
             try {
                 result = parseWithGemini(text, memberContext, historyContext);
             } catch (Exception e) {
-                logger.error("⚠️ Lỗi gọi Gemini: {}. Đang dùng Regex fallback...", e.getMessage(), e);
+                logger.error("⚠️ Lỗi gọi Gemini: {}", e.getMessage(), e);
+                result = new AiParseResult();
+                result.setTitle("LỖI KẾT NỐI AI");
+                result.setDescription("❌ Google Cloud từ chối kết nối. Lỗi chi tiết: **" + e.getMessage() + "**\n\nNếu bạn thấy lỗi 403 hoặc 400, có nghĩa là **API Key này đã bị hỏng/hết hạn hoặc chưa được cấp quyền truy cập AI**.");
+                result.setNeedsClarification(true);
             }
         }
         if (result == null) {
