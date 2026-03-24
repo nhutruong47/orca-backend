@@ -170,65 +170,63 @@ public class AiServiceClient {
         requestBody.put("contents", Collections.singletonList(contentMap));
 
         Map<String, Object> generationConfig = new HashMap<>();
-        generationConfig.put("temperature", 0.2);
-        generationConfig.put("responseMimeType", "application/json");
+        generationConfig.put("temperature", 0.3); // Tăng sáng tạo một chút để mượt hơn
+        // Bỏ responseMimeType để tránh lỗi 400
         requestBody.put("generationConfig", generationConfig);
 
-        String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=" + geminiApiKey;
+        // Chuyển sang API v1 chính thức
+        String url = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=" + geminiApiKey;
         
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
+        headers.set("User-Agent", "Mozilla/5.0");
         
         String requestJson = objectMapper.writeValueAsString(requestBody);
         HttpEntity<String> entity = new HttpEntity<>(requestJson, headers);
 
         String responseBody;
         try {
-            logger.info("📡 Đang gửi yêu cầu đến Gemini (Model: gemini-1.5-flash-latest) : {}", "URL hide for security");
+            logger.info("📡 Gửi yêu cầu AI (Model: gemini-1.5-flash, API v1)");
             ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
             responseBody = response.getBody();
         } catch (org.springframework.web.client.HttpClientErrorException.BadRequest e) {
-            logger.error("🛑 Lỗi 400 (Bad Request) từ Gemini. Có thể tham số JSON không hợp lệ hoặc Key chưa hỗ trợ Model này.");
-            logger.error("Chi tiết phản hồi lỗi: {}", e.getResponseBodyAsString());
-            throw new Exception("Lỗi định dạng yêu cầu gửi đến AI. Vui lòng thử lại.");
-        } catch (org.springframework.web.client.HttpClientErrorException.Unauthorized e) {
-            logger.error("🛑 Lỗi 401 (Unauthorized). API Key của bạn không hợp lệ hoặc đã hết hạn.");
-            throw new Exception("API Key của AI không đúng. Hãy kiểm tra lại Key.");
-        } catch (org.springframework.web.client.HttpClientErrorException.TooManyRequests e) {
-            logger.error("🛑 Gemini Rate Limit (429) hit: {}", e.getResponseBodyAsString());
-            throw new Exception("Hệ thống đang quá tải (Rate limit). Vui lòng thử lại sau giây lát.");
+            logger.error("🛑 Lỗi 400 từ Gemini. Hãy thử gỡ bỏ hoàn toàn system prompt nếu vẫn lỗi.");
+            throw new Exception("Yêu cầu không hợp lệ hoặc lỗi tham số AI.");
         } catch (Exception e) {
-            logger.error("❌ Gemini Call Exception: {}", e.getMessage());
+            logger.error("❌ Lỗi gọi Gemini: {}", e.getMessage());
             throw e;
         }
 
-        if (responseBody == null || responseBody.isBlank()) {
-            throw new Exception("Gemini API returned an empty response.");
-        }
+        if (responseBody == null || responseBody.isBlank()) throw new Exception("AI trả về rỗng.");
 
-        JsonNode rootNode;
-        try {
-            rootNode = objectMapper.readTree(responseBody);
-        } catch (Exception e) {
-            logger.error("❌ Failed to parse Gemini response as JSON. Body preview: {}", 
-                responseBody.substring(0, Math.min(responseBody.length(), 500)));
-            throw new Exception("Lỗi xử lý phản hồi từ AI. Bản tin không đúng định dạng.");
-        }
-
+        JsonNode rootNode = objectMapper.readTree(responseBody);
         JsonNode candidate = rootNode.path("candidates").get(0);
-        if (candidate.isMissingNode()) {
-            logger.error("❌ No candidates in Gemini response: {}", responseBody);
-            throw new Exception("AI không đưa ra phản hồi phù hợp.");
-        }
+        if (candidate.isMissingNode()) throw new Exception("Không có kết quả từ AI.");
 
         String responseText = candidate.path("content").path("parts").get(0).path("text").asText();
-
+        
+        // --- XỬ LÝ TEXT-TO-JSON THÔNG MINH ---
         String jsonStr = responseText.trim();
-        if (jsonStr.startsWith("```json")) jsonStr = jsonStr.substring(7).trim();
-        if (jsonStr.endsWith("```")) jsonStr = jsonStr.substring(0, jsonStr.length() - 3).trim();
+        int firstBrace = jsonStr.indexOf("{");
+        int lastBrace = jsonStr.lastIndexOf("}");
+        
+        if (firstBrace != -1 && lastBrace != -1 && lastBrace > firstBrace) {
+            jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
+            try {
+                return objectMapper.readValue(jsonStr, AiParseResult.class);
+            } catch (Exception e) {
+                logger.warn("⚠️ JSON trong text không chuẩn, đang dùng Regex dự phòng cho text...");
+            }
+        }
 
-        return objectMapper.readValue(jsonStr, AiParseResult.class);
+        // Nếu không có JSON, tự build result từ text menthod
+        AiParseResult manualResult = new AiParseResult();
+        manualResult.setSource("gemini-text-parsed");
+        manualResult.setDescription(responseText);
+        manualResult.setNeedsClarification(responseText.contains("?") || responseText.contains("xin thêm"));
+        manualResult.setTitle("Dự án: " + (responseText.length() > 30 ? responseText.substring(0, 30) + "..." : responseText));
+        
+        return manualResult;
     }
 
     private AiParseResult parseWithRegex(String text) {
