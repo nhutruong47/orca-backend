@@ -92,7 +92,11 @@ public class AiServiceClient {
             try {
                 result = parseWithGemini(text, memberContext, historyContext);
             } catch (Exception e) {
-                logger.error("⚠️ Lỗi gọi Gemini: {}. Đang dùng Regex fallback...", e.getMessage(), e);
+                logger.error("⚠️ Lỗi gọi Gemini: {}", e.getMessage(), e);
+                result = new AiParseResult();
+                result.setTitle("LỖI KẾT NỐI AI");
+                result.setDescription("❌ Lỗi chi tiết từ Server AI: **" + e.getMessage() + "**\n\nBạn hãy chụp màn hình lỗi này gửi cho tôi để tôi xử lý nhé.");
+                result.setNeedsClarification(true);
             }
         }
         if (result == null) {
