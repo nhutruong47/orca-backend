@@ -14,6 +14,7 @@ public class AiParseResult {
     private Boolean needsClarification;
     private String source; // "gemini" or "regex"
     private List<Map<String, Object>> tasks;
+    private List<String> suggestedQuestions; // Proactive suggestions from AI
 
     // Additional fields from older versions (optional, but good for backward compatibility)
     private String phase;
@@ -125,5 +126,13 @@ public class AiParseResult {
 
     public void setContingency(String contingency) {
         this.contingency = contingency;
+    }
+
+    public List<String> getSuggestedQuestions() {
+        return suggestedQuestions;
+    }
+
+    public void setSuggestedQuestions(List<String> suggestedQuestions) {
+        this.suggestedQuestions = suggestedQuestions;
     }
 }

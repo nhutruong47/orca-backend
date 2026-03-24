@@ -9,8 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.*;
 
 import org.example.backend.repository.TeamMemberRepository;
 import org.example.backend.repository.InventoryRepository;
@@ -29,11 +28,9 @@ public class AiServiceClient {
     private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
     
-    private final TeamMemberRepository teamMemberRepository;
     private final InventoryRepository inventoryRepository;
 
-    public AiServiceClient(TeamMemberRepository teamMemberRepository, InventoryRepository inventoryRepository) {
-        this.teamMemberRepository = teamMemberRepository;
+    public AiServiceClient(InventoryRepository inventoryRepository) {
         this.inventoryRepository = inventoryRepository;
     }
 
@@ -82,18 +79,18 @@ public class AiServiceClient {
             }
         }
 
-        return parseTask(input, teamId, context.toString());
+        return parseTask(input, teamId, context.toString(), null);
     }
 
     public AiParseResult parseTask(String text, java.util.UUID teamId) {
-        return parseTask(text, teamId, null);
+        return parseTask(text, teamId, null, null);
     }
 
-    public AiParseResult parseTask(String text, java.util.UUID teamId, String memberContext) {
+    public AiParseResult parseTask(String text, java.util.UUID teamId, String memberContext, String historyContext) {
         AiParseResult result = null;
         if (geminiApiKey != null && !geminiApiKey.isEmpty()) {
             try {
-                result = parseWithGemini(text, memberContext);
+                result = parseWithGemini(text, memberContext, historyContext);
             } catch (Exception e) {
                 logger.error("⚠️ Lỗi gọi Gemini: {}. Đang dùng Regex fallback...", e.getMessage(), e);
             }
@@ -117,53 +114,49 @@ public class AiServiceClient {
         return result;
     }
 
-    private AiParseResult parseWithGemini(String text, String memberContext) throws Exception {
+    private AiParseResult parseWithGemini(String text, String memberContext, String historyContext) throws Exception {
         String memberSection = "";
         if (memberContext != null && !memberContext.isEmpty()) {
-            memberSection = "\n4. DANH SÁCH THÀNH VIÊN VÀ NHÃN DÁN CÔNG VIỆC:\n"
+            memberSection = "\n--- DANH SÁCH THÀNH VIÊN VÀ NHÃN DÁN CÔNG VIỆC ---\n"
                     + memberContext + "\n"
-                    + "QUY TẮC PHÂN CÔNG QUAN TRỌNG: Dựa vào Nhãn dán công việc (Job Labels) của từng thành viên ở trên, "
-                    + "hãy chỉ định trực tiếp tên thành viên phù hợp nhất vào trường \"assignee\" của mỗi task. "
-                    + "Ưu tiên giao việc cho người có nhãn dán liên quan trực tiếp đến nội dung task. "
-                    + "Nếu không có ai phù hợp, giao cho người ít việc nhất.\n\n";
+                    + "PHÂN CÔNG: Dựa vào Job Labels để gán người phù hợp nhất vào trường 'assignee'.\n\n";
         }
 
-        String prompt = "HỆ THỐNG ĐIỀU PHỐI & GIAO VIỆC TỰ ĐỘNG (AUTO-DISPATCHER)\n"
-                + "Vai trò: Bạn là Hệ điều hành quản lý nhân sự (HR & Operations Manager). Nhiệm vụ của bạn là quản lý danh sách thành viên, lập lộ trình sản xuất và trực tiếp giao việc cho từng cá nhân theo từng ca làm việc.\n\n"
-                + "1. Quản lý Thành viên & Nhãn mác (Member Management):\n"
-                + "- Khi có thành viên mới: Yêu cầu người dùng cung cấp [Tên] + [Mác Chính] + [Mác Phụ] vào trường `description` nếu danh sách nhân sự bên dưới chưa đầy đủ thông tin này.\n"
-                + "- Lưu trữ Ma trận kỹ năng: Luôn ghi nhớ và đối soát năng lực của từng người (Kỹ thuật/Kho/Sản xuất/QC) để giao đúng việc.\n\n"
-                + "2. Logic Phân rã Nhiệm vụ \"Từ Lớn đến Nhỏ\" (Top-Down Tasking):\n"
-                + "- Phân tích Mục tiêu: Khi nhận mô tả đơn hàng lớn (Ví dụ: 100 tấn), bạn phải tự động chia thành các đợt sản xuất nhỏ hàng ngày (7-10 tấn/ngày). TRÌNH BÀY BẢNG MASTER ROADMAP VÀO TRƯỜNG `description` dưới dạng Markdown Table (Ngày | Lô SX | Mục tiêu | Ghi chú).\n"
-                + "- Lập lịch Ngày: Chia nhỏ công việc thành Ca (Sáng/Chiều) cho từng thành viên. QUY TẮC: Luôn thêm tiền tố \"[Ca: Sáng]\" hoặc \"[Ca: Chiều]\" vào đầu trường `description` của mỗi task.\n\n"
-                + "3. Tư duy Quản lý Kho & Cảnh báo:\n"
-                + "- Đối soát yêu cầu sản xuất với dư lượng thực tế trong kho.\n"
-                + "- Tự động cảnh báo vào trường `description` nếu vật tư không đủ cho đơn hàng.\n\n"
-                + "--- DỮ LIỆU CONTEXT (NHÂN SỰ & KHO) ---\n"
-                + memberSection + "\n"
-                + "4. Định dạng JSON Phản hồi (BẮT BUỘC):\n"
+        String historySection = "";
+        if (historyContext != null && !historyContext.isEmpty()) {
+            historySection = "\n--- LỊCH SỬ CHAT TRƯỚC ĐÓ ---\n"
+                    + historyContext + "\n\n"
+                    + "QUY TẮC CẬP NHẬT: Ưu tiên giữ cấu trúc kế hoạch cũ, chỉ thay đổi các thông tin người dùng vừa yêu cầu sửa đổi.\n";
+        }
+
+        String prompt = "HỆ THỐNG ĐIỀU PHỐI & GIAO VIỆC TỰ ĐỘNG\n"
+                + "Vai trò: Bạn là nhân sự thông minh. Nhiệm vụ: Nhận yêu cầu, phân rã công việc và giao việc.\n\n"
+                + "1. QUY TẮC TƯƠNG TÁC (Multi-turn):\n"
+                + "- Nếu User thiếu thông tin TRỌNG YẾU (deadline, số lượng): ĐẶT CÂU HỎI vào `description` và đặt `needsClarification` = true.\n"
+                + "- LUÔN GỢI Ý CÂU HỎI (Proactive): Ngay cả khi đã có kế hoạch, hãy liệt kê 1-3 câu hỏi gợi ý để tối ưu kế hoạch vào mảng `suggestedQuestions` (ví dụ: 'Bạn có muốn bổ sung thông tin cho sản lượng không?', 'Có cần quy định thiết bị không?', v.v.)\n"
+                + "- Nếu User yêu cầu sửa đổi: Cập nhật trường tương ứng và giữ nguyên phần khác.\n"
+                + "2. PHÂN RÃ CÔNG VIỆC:\n"
+                + "- Trình bày BẢNG ROADMAP (markdown) trong `description`.\n"
+                + "- Từng task ghi rõ [Ca: Sáng/Chiều] ở đầu mô tả.\n\n"
+                + "--- CONTEXT ---\n"
+                + memberSection
+                + historySection
+                + "Định dạng JSON Phản hồi (BẮT BUỘC):\n"
                 + "{\n"
-                + "  \"title\": \"Tên mục tiêu chính (vd: Sản xuất 100 tấn cà phê)\",\n"
-                + "  \"description\": \"Chứa BẢNG MASTER ROADMAP (Markdown) + Các cảnh báo về kho bãi/nhân sự nếu có\",\n"
-                + "  \"quantity\": \"100 tấn\",\n"
+                + "  \"title\": \"Tên mục tiêu\",\n"
+                + "  \"description\": \"Câu trả lời hoặc Bảng roadmap\",\n"
+                + "  \"quantity\": \"Số lượng\",\n"
                 + "  \"quantityNumber\": 100,\n"
-                + "  \"unit\": \"tấn\",\n"
+                + "  \"unit\": \"đơn vị\",\n"
                 + "  \"deadline\": \"YYYY-MM-DD\",\n"
                 + "  \"priority\": \"High/Medium/Low\",\n"
                 + "  \"needsClarification\": false,\n"
+                + "  \"suggestedQuestions\": [\"Câu hỏi 1?\", \"Câu hỏi 2?\"],\n"
                 + "  \"tasks\": [\n"
-                + "    {\n"
-                + "       \"title\": \"Tên nhiệm vụ ngắn gọn\",\n"
-                + "       \"description\": \"[Ca: Sáng] + Mô tả chi tiết nhiệm vụ và tiêu chuẩn đạt được.\",\n"
-                + "       \"workload\": 8.5, \n"
-                + "       \"priority\": 2,\n"
-                + "       \"assigneeRole\": \"Kỹ thuật/Kho/Sản xuất/QC\",\n"
-                + "       \"assignee\": \"Tên chính xác của người được giao từ danh sách nhân sự\"\n"
-                + "    }\n"
+                + "    { \"title\": \"...\", \"description\": \"[Ca: ...] ...\", \"workload\": 8.0, \"priority\": 2, \"assignee\": \"...\" }\n"
                 + "  ]\n"
-                + "}\n\n"
-                + "LƯU Ý: Tất cả các trường phải có mặt. Trường 'workload' và 'quantityNumber' phải là một số (number), không có dấu ngoặc kép. Trường 'deadline' phải là định dạng ISO (YYYY-MM-DD).\"\n"
-                + "Yêu cầu từ người dùng: \"" + text + "\"";
+                + "}\n"
+                + "Yêu cầu mới nhất của User: \"" + text + "\"";
 
         Map<String, Object> requestBody = new HashMap<>();
         Map<String, Object> contentMap = new HashMap<>();
@@ -174,70 +167,58 @@ public class AiServiceClient {
         requestBody.put("contents", Collections.singletonList(contentMap));
 
         Map<String, Object> generationConfig = new HashMap<>();
-        generationConfig.put("temperature", 0.1);
+        generationConfig.put("temperature", 0.2);
         generationConfig.put("responseMimeType", "application/json");
         requestBody.put("generationConfig", generationConfig);
 
-        String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key="
-                + geminiApiKey;
-
+        String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=" + geminiApiKey;
+        
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
         
         String requestJson = objectMapper.writeValueAsString(requestBody);
-        logger.info("DEBUG AiServiceClient - Sending Request JSON to {}: {}", url.split("\\?")[0], requestJson);
-
         HttpEntity<String> entity = new HttpEntity<>(requestJson, headers);
 
-        ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
-        
-        logger.info("DEBUG AiServiceClient - Gemini Response Code: {}", response.getStatusCode());
-        
-        JsonNode rootNode = objectMapper.readTree(response.getBody());
-
-        JsonNode candidates = rootNode.path("candidates");
-        if (candidates.isMissingNode() || !candidates.isArray() || candidates.size() == 0) {
-            logger.error("DEBUG AiServiceClient - Gemini Response Body: {}", response.getBody());
-            throw new RuntimeException("Invalid Gemini response format");
+        String responseBody;
+        try {
+            logger.info("📡 Calling Gemini API: {}", url);
+            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
+            responseBody = response.getBody();
+        } catch (org.springframework.web.client.HttpClientErrorException.TooManyRequests e) {
+            logger.error("🛑 Gemini Rate Limit (429) hit: {}", e.getResponseBodyAsString());
+            throw new Exception("Hệ thống đang quá tải (Rate limit). Vui lòng thử lại sau giây lát.");
+        } catch (Exception e) {
+            logger.error("❌ Gemini Call Exception: {}", e.getMessage());
+            throw e;
         }
 
-        String responseText = candidates.get(0)
-                .path("content")
-                .path("parts")
-                .get(0)
-                .path("text")
-                .asText();
-
-        if (responseText == null || responseText.isBlank()) {
-            throw new RuntimeException("Empty response from Gemini");
+        if (responseBody == null || responseBody.isBlank()) {
+            throw new Exception("Gemini API returned an empty response.");
         }
+
+        JsonNode rootNode;
+        try {
+            rootNode = objectMapper.readTree(responseBody);
+        } catch (Exception e) {
+            logger.error("❌ Failed to parse Gemini response as JSON. Body preview: {}", 
+                responseBody.substring(0, Math.min(responseBody.length(), 500)));
+            throw new Exception("Lỗi xử lý phản hồi từ AI. Bản tin không đúng định dạng.");
+        }
+
+        JsonNode candidate = rootNode.path("candidates").get(0);
+        if (candidate.isMissingNode()) {
+            logger.error("❌ No candidates in Gemini response: {}", responseBody);
+            throw new Exception("AI không đưa ra phản hồi phù hợp.");
+        }
+
+        String responseText = candidate.path("content").path("parts").get(0).path("text").asText();
 
         String jsonStr = responseText.trim();
-        if (jsonStr.startsWith("```json")) {
-            jsonStr = jsonStr.substring(7).trim();
-            if (jsonStr.endsWith("```")) jsonStr = jsonStr.substring(0, jsonStr.length() - 3).trim();
-        } else if (jsonStr.startsWith("```")) {
-            jsonStr = jsonStr.substring(3).trim();
-            if (jsonStr.endsWith("```")) jsonStr = jsonStr.substring(0, jsonStr.length() - 3).trim();
-        }
+        if (jsonStr.startsWith("```json")) jsonStr = jsonStr.substring(7).trim();
+        if (jsonStr.endsWith("```")) jsonStr = jsonStr.substring(0, jsonStr.length() - 3).trim();
 
-        try {
-            AiParseResult result = objectMapper.readValue(jsonStr, AiParseResult.class);
-            result.setSource("gemini");
-            return result;
-        } catch (Exception e) {
-            logger.error("DEBUG AiServiceClient - JSON Parsing Error: {}. Raw text: {}", e.getMessage(), responseText);
-            Pattern jsonPattern = Pattern.compile("\\{.*\\}", Pattern.DOTALL);
-            Matcher matcher = jsonPattern.matcher(responseText);
-            if (matcher.find()) {
-                String fallbackStr = matcher.group();
-                AiParseResult result = objectMapper.readValue(fallbackStr, AiParseResult.class);
-                result.setSource("gemini");
-                return result;
-            } else {
-                throw new RuntimeException("Could not parse JSON from Gemini: " + e.getMessage(), e);
-            }
-        }
+        return objectMapper.readValue(jsonStr, AiParseResult.class);
     }
 
     private AiParseResult parseWithRegex(String text) {

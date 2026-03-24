@@ -27,6 +27,7 @@ public class AiController {
      */
     @PostMapping("/parse")
     public ResponseEntity<AiParseResult> parseText(@RequestBody Map<String, String> payload) {
+        System.out.println("DEBUG AiController - parseText called with: " + payload);
         String text = payload.getOrDefault("text", "");
         String teamIdStr = payload.get("teamId");
         if (text.isBlank()) {
@@ -56,8 +57,8 @@ public class AiController {
             }
             memberContext = sb.toString();
         }
-        
-        AiParseResult result = aiServiceClient.parseTask(text, teamId, memberContext);
+        String history = payload.get("history");
+        AiParseResult result = aiServiceClient.parseTask(text, teamId, memberContext, history);
         return ResponseEntity.ok(result);
     }
 }
