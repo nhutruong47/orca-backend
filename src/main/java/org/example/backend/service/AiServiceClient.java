@@ -174,7 +174,7 @@ public class AiServiceClient {
         generationConfig.put("responseMimeType", "application/json");
         requestBody.put("generationConfig", generationConfig);
 
-        String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=" + geminiApiKey;
+        String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=" + geminiApiKey;
         
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -185,9 +185,16 @@ public class AiServiceClient {
 
         String responseBody;
         try {
-            logger.info("📡 Calling Gemini API: {}", url);
+            logger.info("📡 Đang gửi yêu cầu đến Gemini (Model: gemini-1.5-flash-latest) : {}", "URL hide for security");
             ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
             responseBody = response.getBody();
+        } catch (org.springframework.web.client.HttpClientErrorException.BadRequest e) {
+            logger.error("🛑 Lỗi 400 (Bad Request) từ Gemini. Có thể tham số JSON không hợp lệ hoặc Key chưa hỗ trợ Model này.");
+            logger.error("Chi tiết phản hồi lỗi: {}", e.getResponseBodyAsString());
+            throw new Exception("Lỗi định dạng yêu cầu gửi đến AI. Vui lòng thử lại.");
+        } catch (org.springframework.web.client.HttpClientErrorException.Unauthorized e) {
+            logger.error("🛑 Lỗi 401 (Unauthorized). API Key của bạn không hợp lệ hoặc đã hết hạn.");
+            throw new Exception("API Key của AI không đúng. Hãy kiểm tra lại Key.");
         } catch (org.springframework.web.client.HttpClientErrorException.TooManyRequests e) {
             logger.error("🛑 Gemini Rate Limit (429) hit: {}", e.getResponseBodyAsString());
             throw new Exception("Hệ thống đang quá tải (Rate limit). Vui lòng thử lại sau giây lát.");
