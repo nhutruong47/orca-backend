@@ -74,6 +74,19 @@ public class TaskService {
         return toDTO(saved);
     }
 
+    public TaskDTO updateProgress(UUID id, int percentage) {
+        Task t = taskRepo.findById(id).orElseThrow(() -> new RuntimeException("Task not found"));
+        t.setCompletionPercentage(percentage);
+        if (percentage == 100) {
+            t.setStatus("COMPLETED");
+        } else if (percentage > 0 && "PENDING".equals(t.getStatus())) {
+            t.setStatus("IN_PROGRESS");
+        }
+        Task saved = taskRepo.save(t);
+        updateGoalProgress(saved.getGoal().getId());
+        return toDTO(saved);
+    }
+
     public TaskDTO updateWorkload(UUID id, Double actualWorkload) {
         Task t = taskRepo.findById(id).orElseThrow(() -> new RuntimeException("Task not found"));
         t.setActualWorkload(actualWorkload);

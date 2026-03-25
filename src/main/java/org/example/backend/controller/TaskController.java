@@ -67,6 +67,15 @@ public class TaskController {
         }
     }
 
+    @PatchMapping("/{id}/progress")
+    public ResponseEntity<?> updateProgress(@PathVariable UUID id, @RequestBody Map<String, Integer> body) {
+        try {
+            return ResponseEntity.ok(taskService.updateProgress(id, body.get("percentage")));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @PatchMapping("/{id}/workload")
     public ResponseEntity<?> updateWorkload(@PathVariable UUID id, @RequestBody Map<String, Double> body) {
         try {
