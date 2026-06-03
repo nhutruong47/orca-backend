@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+frontend-web/node_modules/
+
+# Build outputs
+frontend-web/dist/
+frontend-web/build/
+orca-backend/target/
+
+# Logs
+*.log
+frontend-web/vite-*.err
+orca-backend/*.err
+orca-backend/*.txt
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/
+
+# Environment files
+.env
+.env.*
