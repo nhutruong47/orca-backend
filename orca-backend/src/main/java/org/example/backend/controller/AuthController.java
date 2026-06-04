@@ -25,7 +25,10 @@ public class AuthController {
         try {
             return ResponseEntity.ok(authService.register(request));
         } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            String message = e.getMessage() != null && e.getMessage().contains("tồn tại")
+                    ? "Tên đăng nhập đã tồn tại. Vui lòng chọn tên khác."
+                    : "Không thể đăng ký tài khoản. Vui lòng kiểm tra thông tin và thử lại.";
+            return ResponseEntity.badRequest().body(Map.of("error", message));
         }
     }
 

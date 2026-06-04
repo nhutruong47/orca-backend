@@ -27,14 +27,19 @@ public class AuthService {
     private AuthenticationManager authenticationManager;
 
     public AuthResponse register(RegisterRequest request) {
-        if (userRepository.existsByUsername(request.getUsername())) {
-            throw new RuntimeException("Username đã tồn tại: " + request.getUsername());
+        String username = request.getUsername() != null ? request.getUsername().trim() : "";
+        if (username.isBlank()) {
+            throw new RuntimeException("Vui lòng nhập tên đăng nhập.");
+        }
+        if (userRepository.findByUsernameIgnoreCase(username).isPresent()) {
+            throw new RuntimeException("Tên đăng nhập đã tồn tại.");
         }
 
         User user = User.builder()
-                .username(request.getUsername())
+                .username(username)
                 .password(passwordEncoder.encode(request.getPassword()))
                 .role(Role.MEMBER)
+                .chipId("CHIP-" + java.util.UUID.randomUUID())
                 .build();
 
         userRepository.save(user);

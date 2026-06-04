@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 150" role="img" aria-labelledby="title">
+  <title>ORCA logo</title>
+  <defs>
+    <linearGradient id="gold" x1="36" y1="108" x2="124" y2="30" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7a350f"/>
+      <stop offset="0.22" stop-color="#b76522"/>
+      <stop offset="0.48" stop-color="#f0b86a"/>
+      <stop offset="0.7" stop-color="#8d4314"/>
+      <stop offset="1" stop-color="#3b1808"/>
+    </linearGradient>
+    <linearGradient id="goldLight" x1="58" y1="34" x2="112" y2="72" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffd48c"/>
+      <stop offset="0.5" stop-color="#c06a24"/>
+      <stop offset="1" stop-color="#5b2409"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="8" stdDeviation="6" flood-color="#000" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#shadow)">
+    <path fill="url(#gold)" d="M32 98c8-21 24-38 49-47 15-6 36-8 56-2 11 3 19 9 24 17-14-1-28 2-41 8-8 10-20 18-36 24-17 6-34 5-50 0Z"/>
+    <path fill="#2b1208" d="M42 92c9-14 24-24 44-30 21-6 43-5 62 4-20 2-37 8-51 20-18 9-37 10-55 6Z" opacity="0.6"/>
+    <path fill="url(#goldLight)" d="M80 52c-6-16-2-29 10-38 7 16 17 28 32 40-13-6-27-8-42-2Z"/>
+    <path fill="#ffd99a" d="M129 58c13-1 25 3 34 11-12 2-24 1-35-4-4-2-4-4 1-7Z"/>
+    <path fill="#ffe0a6" d="M66 61c12-7 28-10 43-9-12 6-22 13-29 23-10-1-18-3-24-7 2-3 5-5 10-7Z"/>
+    <path fill="#1a0b05" d="M149 62c6 2 11 6 15 11-7-3-14-4-22-2 2-4 4-7 7-9Z"/>
+    <path fill="#a85519" d="M82 91c7 8 17 12 31 12-8 8-18 12-29 11-9-1-14-4-16-10 4-5 9-9 14-13Z"/>
+    <path fill="#d98733" d="M39 101c-12 4-22 11-30 23 1-18 9-29 25-37 8 6 17 9 27 10-8 1-15 2-22 4Z"/>
+    <path fill="#f1a956" d="M43 110c15 2 31 1 47-4-18 11-37 15-57 12 3-3 6-6 10-8Z"/>
+    <path fill="#d78232" d="M65 120c19-2 39-8 59-19-18 18-40 27-67 27 2-3 4-5 8-8Z"/>
+    <path fill="#b75e21" d="M93 130c15-6 29-16 43-31-8 22-25 34-52 38 3-3 5-5 9-7Z"/>
+  </g>
+</svg>

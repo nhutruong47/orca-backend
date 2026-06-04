@@ -7,6 +7,8 @@ import org.example.backend.repository.*;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -44,8 +46,8 @@ public class GoalService {
                 .orElseThrow(() -> new RuntimeException("Team not found"));
 
         // Chỉ Owner được tạo goal
-        if (!team.getOwner().getId().equals(currentUser.getId())) {
-            throw new RuntimeException("Only the group owner can create goals");
+        if (!isTeamManager(team, currentUser)) {
+            throw new RuntimeException("Only managers can create production plans");
         }
 
         Goal g = new Goal();
@@ -100,15 +102,17 @@ public class GoalService {
             generatedTasks = new ArrayList<>();
         }
         
-        List<String> memberNames = teamMemberRepo.findByTeamId(team.getId()).stream()
+        List<TeamMember> assignableMembers = teamMemberRepo.findByTeamId(team.getId());
+        List<String> memberNames = assignableMembers.stream()
                 .map(tm -> tm.getUser().getUsername())
                 .collect(Collectors.toList());
 
 
         if (!generatedTasks.isEmpty()) {
             // Tạo tasks từ AI plan
-            int taskCount = 0;
+            int totalTaskCount = generatedTasks.size();
             int memberIndex = 0;
+            double totalGoalTarget = extractQuantity(saved.getOutputTarget());
             for (Map<String, Object> tp : generatedTasks) {
                 Task task = new Task();
                 task.setGoal(saved);
@@ -139,13 +143,23 @@ public class GoalService {
                 }
                 
                 task.setDeadline(parsedDeadline);
-                task.setStatus("PENDING");
+                task.setOutputTarget(totalGoalTarget > 0 && totalTaskCount > 0 ? totalGoalTarget / totalTaskCount : 0.0);
+                task.setActualOutput(0.0);
+                task.setStatus("READY");
 
                 // Phân công (Assignee): Ưu tiên tên AI chỉ định, fallback round-robin
-                String aiAssignee = (String) tp.get("assignee");
+                String aiAssignee = firstText(tp,
+                        "assignee",
+                        "suggestedAssignee",
+                        "primaryWorker",
+                        "worker",
+                        "member",
+                        "employee",
+                        "nhanSu",
+                        "personnel");
                 boolean assigned = false;
                 if (aiAssignee != null && !aiAssignee.isEmpty()) {
-                    Optional<User> matchedUser = userRepo.findByUsernameIgnoreCase(aiAssignee.trim());
+                    Optional<User> matchedUser = findTeamUser(assignableMembers, aiAssignee.trim());
                     if (matchedUser.isPresent()) {
                         task.setMember(matchedUser.get());
                         assigned = true;
@@ -160,10 +174,9 @@ public class GoalService {
                 }
 
                 taskRepo.save(task);
-                taskCount++;
             }
 
-            saved.setTotalTasks(taskCount);
+            saved.setTotalTasks(totalTaskCount);
             saved.setCompletedTasks(0);
             saved.setStatus("PUBLISHED");
         } else {
@@ -177,6 +190,27 @@ public class GoalService {
         goalRepo.save(saved);
 
         return toDTO(saved);
+    }
+
+    private double extractQuantity(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return 0.0;
+        }
+        Matcher matcher = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*(kg|g|tấn|tan|ton|t)?", Pattern.CASE_INSENSITIVE).matcher(raw.toLowerCase());
+        if (!matcher.find()) {
+            return 0.0;
+        }
+        double value = Double.parseDouble(matcher.group(1));
+        String unit = matcher.group(2);
+        if (unit == null) {
+            return value;
+        }
+        return switch (unit) {
+            case "tấn", "tan", "ton", "t" -> value * 1000.0;
+            case "kg" -> value;
+            case "g" -> value / 1000.0;
+            default -> value;
+        };
     }
 
     public GoalDTO updateStatus(UUID id, String status) {
@@ -195,9 +229,37 @@ public class GoalService {
         return toDTO(goalRepo.save(g));
     }
 
+    public GoalDTO updateStatus(UUID id, String status, User actor) {
+        Goal g = goalRepo.findById(id).orElseThrow(() -> new RuntimeException("Goal not found"));
+        if (!isTeamManager(g.getTeam(), actor)) {
+            throw new RuntimeException("Only managers can update production plans");
+        }
+        return updateStatus(id, status);
+    }
+
     public void delete(UUID id) {
         taskRepo.deleteAll(taskRepo.findByGoalId(id));
         goalRepo.deleteById(id);
+    }
+
+    public void delete(UUID id, User actor) {
+        Goal g = goalRepo.findById(id).orElseThrow(() -> new RuntimeException("Goal not found"));
+        if (!isTeamManager(g.getTeam(), actor)) {
+            throw new RuntimeException("Only managers can delete production plans");
+        }
+        delete(id);
+    }
+
+    private boolean isTeamManager(Team team, User user) {
+        if (team == null || user == null) {
+            return false;
+        }
+        if (user.getRole() == Role.ADMIN || (team.getOwner() != null && team.getOwner().getId().equals(user.getId()))) {
+            return true;
+        }
+        return teamMemberRepo.findByTeamIdAndUserId(team.getId(), user.getId())
+                .map(tm -> tm.getGroupRole() == GroupRole.ADMIN)
+                .orElse(false);
     }
 
     private GoalDTO toDTO(Goal g) {
@@ -238,5 +300,30 @@ public class GoalService {
                 return LocalDateTime.now().plusDays(7);
             }
         }
+    }
+
+    private String firstText(Map<String, Object> source, String... keys) {
+        for (String key : keys) {
+            Object value = source.get(key);
+            if (value instanceof String text && !text.trim().isEmpty()) {
+                return text.trim();
+            }
+        }
+        return null;
+    }
+
+    private Optional<User> findTeamUser(List<TeamMember> members, String name) {
+        String normalized = name.trim().toLowerCase(Locale.ROOT);
+        return members.stream()
+                .map(TeamMember::getUser)
+                .filter(user -> {
+                    String username = user.getUsername() != null ? user.getUsername().toLowerCase(Locale.ROOT) : "";
+                    String fullName = user.getFullName() != null ? user.getFullName().toLowerCase(Locale.ROOT) : "";
+                    return username.equals(normalized)
+                            || fullName.equals(normalized)
+                            || username.contains(normalized)
+                            || fullName.contains(normalized);
+                })
+                .findFirst();
     }
 }

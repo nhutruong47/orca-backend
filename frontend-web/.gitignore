@@ -1,24 +1,23 @@
+# Dependencies
+node_modules/
+frontend-web/node_modules/
+
+# Build outputs
+frontend-web/dist/
+frontend-web/build/
+orca-backend/target/
+
 # Logs
-logs
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
+frontend-web/vite-*.err
+orca-backend/*.err
+orca-backend/*.txt
 
-node_modules
-dist
-dist-ssr
-*.local
-
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
+# OS/editor
 .DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+.vscode/
+.idea/
+
+# Environment files
+.env
+.env.*
