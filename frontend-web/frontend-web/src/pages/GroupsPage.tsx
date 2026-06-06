@@ -12,7 +12,6 @@ export default function GroupsPage() {
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [inviteCode, setInviteCode] = useState('');
   const [error, setError] = useState('');
 
   const totalMembers = useMemo(
@@ -61,7 +60,6 @@ export default function GroupsPage() {
   };
 
   const openJoinModal = () => {
-    setInviteCode('');
     setError('');
     setShowJoinModal(true);
   };
@@ -69,7 +67,6 @@ export default function GroupsPage() {
   const closeJoinModal = () => {
     if (saving) return;
     setShowJoinModal(false);
-    setInviteCode('');
     setError('');
   };
 
@@ -100,25 +97,8 @@ export default function GroupsPage() {
 
   const handleJoinGroup = async (event: FormEvent) => {
     event.preventDefault();
-    const code = inviteCode.trim().toUpperCase();
-    if (!code) {
-      setError('Vui lòng nhập mã mời nhóm.');
-      return;
-    }
-
-    setSaving(true);
-    setError('');
-    try {
-      const joined = await teamService.joinByCode(code);
-      setGroups(current => [joined, ...current.filter(group => group.id !== joined.id)]);
-      setShowJoinModal(false);
-      setInviteCode('');
-      navigate(`/groups/${joined.id}`);
-    } catch (err: any) {
-      setError(err?.response?.data?.error || err?.response?.data?.message || 'Không thể tham gia nhóm. Vui lòng kiểm tra lại mã mời.');
-    } finally {
-      setSaving(false);
-    }
+    setSaving(false);
+    setError('Luồng tham gia bằng mã mời chung đã bị vô hiệu hóa. Vui lòng yêu cầu chủ nhóm gửi lời mời qua email.');
   };
 
   return (
@@ -341,29 +321,20 @@ export default function GroupsPage() {
                 </div>
               )}
 
-              <div className="form-group">
-                <label className="form-label">Mã mời nhóm</label>
-                <input
-                  className="form-input"
-                  style={{ paddingLeft: 14, textTransform: 'uppercase', letterSpacing: '0.18em', fontWeight: 800 }}
-                  value={inviteCode}
-                  onChange={event => setInviteCode(event.target.value.toUpperCase())}
-                  placeholder="VD: OJNWSP"
-                  maxLength={12}
-                  autoFocus
-                />
+              <div style={{ padding: '12px 14px', borderRadius: 12, background: '#fff7ed', border: '1px solid #fdba74', color: '#9a5b00', fontSize: 13, lineHeight: 1.5 }}>
+                Luồng tham gia bằng mã mời chung đã bị vô hiệu hóa để tránh việc thêm thành viên trái phép. Vui lòng yêu cầu chủ nhóm gửi lời mời qua email.
               </div>
 
-              <p style={{ margin: '-4px 0 10px', color: 'var(--text-secondary)', fontSize: 13 }}>
-                Nhập mã mời do chủ nhóm gửi cho bạn.
+              <p style={{ margin: '10px 0 0', color: 'var(--text-secondary)', fontSize: 13 }}>
+                Sau khi nhận email mời, hãy mở đường link và chấp nhận lời mời.
               </p>
 
               <div className="modal-actions">
                 <button type="button" className="btn btn-secondary" onClick={closeJoinModal} disabled={saving}>
                   Hủy
                 </button>
-                <button type="submit" className="btn btn-primary" disabled={saving}>
-                  {saving ? 'Đang tham gia...' : 'Tham gia'}
+                <button type="submit" className="btn btn-primary" disabled={true}>
+                  Tạm thời khóa
                 </button>
               </div>
             </form>

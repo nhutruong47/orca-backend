@@ -2,12 +2,18 @@ package org.example.backend.service;
 
 import org.example.backend.entity.Goal;
 import org.example.backend.entity.InterGroupOrder;
+import org.example.backend.entity.PaymentTransaction;
+import org.example.backend.entity.ProductionBatch;
+import org.example.backend.entity.ProductionOrder;
 import org.example.backend.entity.Role;
 import org.example.backend.entity.Task;
 import org.example.backend.entity.Team;
 import org.example.backend.entity.User;
 import org.example.backend.repository.GoalRepository;
 import org.example.backend.repository.InterGroupOrderRepository;
+import org.example.backend.repository.PaymentTransactionRepository;
+import org.example.backend.repository.ProductionBatchRepository;
+import org.example.backend.repository.ProductionOrderRepository;
 import org.example.backend.repository.TaskRepository;
 import org.example.backend.repository.TeamMemberRepository;
 import org.example.backend.repository.TeamRepository;
@@ -15,6 +21,7 @@ import org.example.backend.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -34,6 +41,9 @@ public class AdminService {
     private final GoalRepository goalRepository;
     private final TaskRepository taskRepository;
     private final InterGroupOrderRepository orderRepository;
+    private final ProductionOrderRepository productionOrderRepository;
+    private final ProductionBatchRepository productionBatchRepository;
+    private final PaymentTransactionRepository paymentRepository;
     private final TaskService taskService;
 
     public AdminService(
@@ -43,6 +53,9 @@ public class AdminService {
             GoalRepository goalRepository,
             TaskRepository taskRepository,
             InterGroupOrderRepository orderRepository,
+            ProductionOrderRepository productionOrderRepository,
+            ProductionBatchRepository productionBatchRepository,
+            PaymentTransactionRepository paymentRepository,
             TaskService taskService) {
         this.userRepository = userRepository;
         this.teamRepository = teamRepository;
@@ -50,6 +63,9 @@ public class AdminService {
         this.goalRepository = goalRepository;
         this.taskRepository = taskRepository;
         this.orderRepository = orderRepository;
+        this.productionOrderRepository = productionOrderRepository;
+        this.productionBatchRepository = productionBatchRepository;
+        this.paymentRepository = paymentRepository;
         this.taskService = taskService;
     }
 
@@ -59,13 +75,25 @@ public class AdminService {
         List<Goal> goals = goalRepository.findAll();
         List<Task> tasks = taskRepository.findAll();
         List<InterGroupOrder> orders = orderRepository.findAll();
+        List<ProductionOrder> productionOrders = productionOrderRepository.findAll();
+        List<ProductionBatch> productionBatches = productionBatchRepository.findAll();
+        List<PaymentTransaction> payments = paymentRepository.findAll();
         LocalDateTime now = LocalDateTime.now();
+        LocalDateTime monthStart = LocalDate.now().withDayOfMonth(1).atStartOfDay();
+        LocalDateTime previousMonthStart = monthStart.minusMonths(1);
+        LocalDateTime yearStart = LocalDate.of(now.getYear(), 1, 1).atStartOfDay();
+        LocalDateTime previousYearStart = yearStart.minusYears(1);
 
         Map<String, Object> overview = new LinkedHashMap<>();
         overview.put("totalUsers", users.size());
         overview.put("adminUsers", users.stream().filter(user -> user.getRole() == Role.ADMIN).count());
+        overview.put("memberUsers", users.stream().filter(user -> user.getRole() != Role.ADMIN).count());
+        overview.put("newUsersThisMonth", countCreatedBetweenUsers(users, monthStart, now));
+        overview.put("newUsersPreviousMonth", countCreatedBetweenUsers(users, previousMonthStart, monthStart));
         overview.put("totalTeams", teams.size());
         overview.put("publishedTeams", teams.stream().filter(Team::isPublished).count());
+        overview.put("newTeamsThisMonth", countCreatedBetweenTeams(teams, monthStart, now));
+        overview.put("newTeamsPreviousMonth", countCreatedBetweenTeams(teams, previousMonthStart, monthStart));
         overview.put("totalGoals", goals.size());
         overview.put("activeGoals", goals.stream().filter(goal -> !"DONE".equals(goal.getStatus())).count());
         overview.put("totalTasks", tasks.size());
@@ -79,7 +107,35 @@ public class AdminService {
         overview.put("activeOrders", orders.stream()
                 .filter(order -> "PENDING".equals(order.getStatus()) || "ACCEPTED".equals(order.getStatus()))
                 .count());
+        overview.put("totalProductionOrders", productionOrders.size());
+        overview.put("activeProductionOrders", productionOrders.stream()
+                .filter(order -> isActiveStatus(order.getStatus()))
+                .count());
+        overview.put("overdueProductionOrders", productionOrders.stream()
+                .filter(order -> order.getDeadline() != null
+                        && order.getDeadline().isBefore(now)
+                        && isActiveStatus(order.getStatus()))
+                .count());
+        overview.put("totalBatches", productionBatches.size());
+        overview.put("activeBatches", productionBatches.stream()
+                .filter(batch -> isActiveStatus(batch.getStatus()))
+                .count());
+        overview.put("completedBatches", productionBatches.stream()
+                .filter(batch -> isCompletedStatus(batch.getStatus()))
+                .count());
+        overview.put("paidPayments", payments.stream().filter(this::isPaidPayment).count());
+        overview.put("totalPayments", payments.size());
+        overview.put("revenueThisMonth", sumPaidBetween(payments, monthStart, now));
+        overview.put("revenuePreviousMonth", sumPaidBetween(payments, previousMonthStart, monthStart));
+        overview.put("revenueThisYear", sumPaidBetween(payments, yearStart, now));
+        overview.put("revenuePreviousYear", sumPaidBetween(payments, previousYearStart, yearStart));
+        overview.put("revenueTotal", payments.stream()
+                .filter(this::isPaidPayment)
+                .mapToLong(PaymentTransaction::getAmount)
+                .sum());
         overview.put("orderStatusCounts", countByStatus(orders, InterGroupOrder::getStatus));
+        overview.put("productionOrderStatusCounts", countByStatus(productionOrders, ProductionOrder::getStatus));
+        overview.put("batchStatusCounts", countByStatus(productionBatches, ProductionBatch::getStatus));
         overview.put("taskStatusCounts", countByStatus(tasks, Task::getStatus));
         overview.put("recentUsers", users.stream()
                 .sorted(this::compareCreatedAtDesc)
@@ -93,6 +149,40 @@ public class AdminService {
                 .toList());
 
         return overview;
+    }
+
+    private long countCreatedBetweenUsers(List<User> users, LocalDateTime start, LocalDateTime end) {
+        return users.stream().filter(user -> isBetween(user.getCreatedAt(), start, end)).count();
+    }
+
+    private long countCreatedBetweenTeams(List<Team> teams, LocalDateTime start, LocalDateTime end) {
+        return teams.stream().filter(team -> isBetween(team.getCreatedAt(), start, end)).count();
+    }
+
+    private long sumPaidBetween(List<PaymentTransaction> payments, LocalDateTime start, LocalDateTime end) {
+        return payments.stream()
+                .filter(this::isPaidPayment)
+                .filter(payment -> isBetween(payment.getPaidAt() != null ? payment.getPaidAt() : payment.getCreatedAt(), start, end))
+                .mapToLong(PaymentTransaction::getAmount)
+                .sum();
+    }
+
+    private boolean isBetween(LocalDateTime value, LocalDateTime start, LocalDateTime end) {
+        return value != null && !value.isBefore(start) && value.isBefore(end);
+    }
+
+    private boolean isPaidPayment(PaymentTransaction payment) {
+        return "PAID".equalsIgnoreCase(safeText(payment.getStatus(), ""));
+    }
+
+    private boolean isActiveStatus(String status) {
+        String normalized = safeText(status, "").toUpperCase(Locale.ROOT);
+        return !List.of("COMPLETED", "COMPLETE", "DONE", "CANCELLED", "CANCELED", "REJECTED").contains(normalized);
+    }
+
+    private boolean isCompletedStatus(String status) {
+        String normalized = safeText(status, "").toUpperCase(Locale.ROOT);
+        return List.of("COMPLETED", "COMPLETE", "DONE").contains(normalized);
     }
 
     public List<Map<String, Object>> getUsers() {
@@ -120,6 +210,13 @@ public class AdminService {
         return taskRepository.findAll().stream()
                 .sorted(this::compareCreatedAtDesc)
                 .map(this::toTaskMap)
+                .toList();
+    }
+
+    public List<Map<String, Object>> getPayments() {
+        return paymentRepository.findAll().stream()
+                .sorted(this::comparePaidAtDesc)
+                .map(this::toPaymentMap)
                 .toList();
     }
 
@@ -265,6 +362,23 @@ public class AdminService {
         return map;
     }
 
+    private Map<String, Object> toPaymentMap(PaymentTransaction payment) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("id", payment.getId().toString());
+        map.put("txnRef", payment.getTxnRef());
+        map.put("userId", payment.getUser() != null ? payment.getUser().getId().toString() : "");
+        map.put("username", payment.getUser() != null ? payment.getUser().getUsername() : "");
+        map.put("fullName", payment.getUser() != null ? safeText(payment.getUser().getFullName(), "") : "");
+        map.put("email", payment.getUser() != null ? safeText(payment.getUser().getEmail(), "") : "");
+        map.put("planId", payment.getPlanId());
+        map.put("amount", payment.getAmount());
+        map.put("status", payment.getStatus());
+        map.put("bankCode", safeText(payment.getBankCode(), ""));
+        map.put("createdAt", payment.getCreatedAt() != null ? payment.getCreatedAt().toString() : null);
+        map.put("paidAt", payment.getPaidAt() != null ? payment.getPaidAt().toString() : null);
+        return map;
+    }
+
     private String safeText(String value, String fallback) {
         return value != null ? value : fallback;
     }
@@ -283,6 +397,12 @@ public class AdminService {
 
     private int compareCreatedAtDesc(Task left, Task right) {
         return compareDateDesc(left.getCreatedAt(), right.getCreatedAt());
+    }
+
+    private int comparePaidAtDesc(PaymentTransaction left, PaymentTransaction right) {
+        LocalDateTime leftDate = left.getPaidAt() != null ? left.getPaidAt() : left.getCreatedAt();
+        LocalDateTime rightDate = right.getPaidAt() != null ? right.getPaidAt() : right.getCreatedAt();
+        return compareDateDesc(leftDate, rightDate);
     }
 
     private int compareDateDesc(LocalDateTime left, LocalDateTime right) {

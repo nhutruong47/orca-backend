@@ -58,13 +58,8 @@ export default function InviteAcceptPage() {
             const headers = { Authorization: `Bearer ${jwt}` };
 
             if (isCodeMode) {
-                // Join by invite code
-                const res = await axios.post(
-                    `${API}/api/teams/join`,
-                    { inviteCode },
-                    { headers }
-                );
-                setJoinedTeamName(res.data?.name || '');
+                setError('Luồng tham gia bằng mã mời chung đã bị vô hiệu hóa. Vui lòng yêu cầu chủ nhóm gửi lời mời qua email.');
+                return;
             } else {
                 // Join by token
                 await axios.post(

@@ -325,11 +325,31 @@ export interface AdminTask {
     createdAt: string | null;
 }
 
+export interface AdminPayment {
+    id: string;
+    txnRef: string;
+    userId: string;
+    username: string;
+    fullName: string;
+    email: string;
+    planId: string;
+    amount: number;
+    status: string;
+    bankCode: string;
+    createdAt: string | null;
+    paidAt: string | null;
+}
+
 export interface AdminOverview {
     totalUsers: number;
     adminUsers: number;
+    memberUsers: number;
+    newUsersThisMonth: number;
+    newUsersPreviousMonth: number;
     totalTeams: number;
     publishedTeams: number;
+    newTeamsThisMonth: number;
+    newTeamsPreviousMonth: number;
     totalGoals: number;
     activeGoals: number;
     totalTasks: number;
@@ -337,7 +357,22 @@ export interface AdminOverview {
     overdueTasks: number;
     totalOrders: number;
     activeOrders: number;
+    totalProductionOrders: number;
+    activeProductionOrders: number;
+    overdueProductionOrders: number;
+    totalBatches: number;
+    activeBatches: number;
+    completedBatches: number;
+    paidPayments: number;
+    totalPayments: number;
+    revenueThisMonth: number;
+    revenuePreviousMonth: number;
+    revenueThisYear: number;
+    revenuePreviousYear: number;
+    revenueTotal: number;
     orderStatusCounts: Record<string, number>;
+    productionOrderStatusCounts: Record<string, number>;
+    batchStatusCounts: Record<string, number>;
     taskStatusCounts: Record<string, number>;
     recentUsers: AdminUser[];
     recentTeams: AdminTeam[];

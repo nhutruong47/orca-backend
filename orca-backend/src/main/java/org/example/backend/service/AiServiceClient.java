@@ -176,7 +176,7 @@ public class AiServiceClient {
                 + "  \"needsClarification\": false,\n"
                 + "  \"suggestedQuestions\": [\"Câu hỏi 1?\", \"Câu hỏi 2?\"],\n"
                 + "  \"tasks\": [\n"
-                + "    { \"title\": \"...\", \"description\": \"[Ca: ...] ...\", \"workload\": 8.0, \"priority\": 2, \"assignee\": \"...\" }\n"
+                + "    { \"title\": \"...\", \"description\": \"[Ca: ...] ...\", \"workload\": 8.0, \"priority\": 2, \"assignee\": \"...\", \"backupMember\": \"...\" }\n"
                 + "  ]\n"
                 + "}\n"
                 + "Yêu cầu mới nhất của User: \"" + text + "\"";

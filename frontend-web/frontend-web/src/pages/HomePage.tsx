@@ -41,13 +41,10 @@ const roastingVideo =
   'https://www.shutterstock.com/shutterstock/videos/1107166639/preview/stock-footage-production-of-fresh-fried-coffee-beans-roast-master-opens-roasting-coffee-machine-roasted-coffee.mp4';
 
 const navItems = [
-  { label: 'Home', subtitle: 'take a coffee', target: 'hero' },
-  { label: 'About', subtitle: 'who we are', target: 'solution' },
-  { label: 'Our Menu', subtitle: 'coffee & tea', target: 'features' },
-  { label: 'Blog', subtitle: 'our news', target: 'dashboard' },
-  { label: 'Shop', subtitle: 'products', target: 'workshops' },
-  { label: 'FAQ', subtitle: 'questions', target: 'ai' },
-  { label: 'Contact', subtitle: 'write us', target: 'contact' }
+  { label: 'Trang chủ', target: 'hero' },
+  { label: 'Giới thiệu', target: 'solution' },
+  { label: 'Tính năng', target: 'features' },
+  { label: 'Hỏi đáp', target: 'ai' }
 ];
 
 const stats = [
@@ -294,27 +291,17 @@ export default function HomePage() {
 
   return (
     <main className="coffee-home">
-      <header className={`coffee-nav${navScrolled ? ' coffee-nav--scrolled' : ''}${navHidden ? ' coffee-nav--hidden' : ''}`} aria-label="Primary navigation">
-        <div className="coffee-nav__offer" aria-label="Promotional banner">
-          <div className="coffee-nav__market">
-            <span className="coffee-nav__market-mark">OR</span>
-            <strong>orca</strong>
-            <span>market</span>
-          </div>
-          <p>Limited time offer, build your coffee workflow with <strong>ORCA</strong></p>
-          <button onClick={() => scrollTo('pricing')}>Start ORCA</button>
-        </div>
-
+      <header className={`coffee-nav${navScrolled ? ' coffee-nav--scrolled' : ''}${navHidden ? ' coffee-nav--hidden' : ''}`} aria-label="Điều hướng chính">
         <div className="coffee-nav__inner">
-          <button className="coffee-nav__brand" onClick={() => scrollTo('hero')} aria-label="ORCA home">
-            <Coffee size={44} strokeWidth={1.8} aria-hidden="true" />
+          <button className="coffee-nav__brand" onClick={() => scrollTo('hero')} aria-label="Trang chủ ORCA">
+            <Coffee size={34} strokeWidth={1.8} aria-hidden="true" />
             <span>
               <strong>ORCA</strong>
               <strong>COFFEE</strong>
             </span>
           </button>
 
-          <nav className="coffee-nav__links" aria-label="Landing page sections">
+          <nav className="coffee-nav__links" aria-label="Các mục trên trang">
             {navItems.map((item) => (
               <button
                 key={item.target}
@@ -322,21 +309,13 @@ export default function HomePage() {
                 onClick={() => scrollTo(item.target)}
               >
                 <span>{item.label}</span>
-                <small>{item.subtitle}</small>
               </button>
             ))}
           </nav>
 
-          <div className="coffee-nav__social" aria-label="Social links">
-            <a href="https://facebook.com" aria-label="Facebook">
-              f
-            </a>
-            <a href="https://x.com" aria-label="X">
-              X
-            </a>
-            <a href="https://instagram.com" aria-label="Instagram">
-              IG
-            </a>
+          <div className="coffee-nav__auth" aria-label="Tài khoản">
+            <button type="button" onClick={() => navigate('/login')}>Đăng nhập</button>
+            <button type="button" onClick={() => navigate('/register')}>Đăng ký</button>
           </div>
         </div>
       </header>

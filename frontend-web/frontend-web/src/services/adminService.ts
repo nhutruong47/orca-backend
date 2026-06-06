@@ -1,5 +1,5 @@
 import api from './api';
-import type { AdminOrder, AdminOverview, AdminTask, AdminTeam, AdminUser } from '../types/types';
+import type { AdminOrder, AdminOverview, AdminPayment, AdminTask, AdminTeam, AdminUser } from '../types/types';
 
 export const adminService = {
     getOverview: () =>
@@ -12,6 +12,8 @@ export const adminService = {
         api.get<AdminOrder[]>('/api/admin/orders').then(r => r.data),
     getTasks: () =>
         api.get<AdminTask[]>('/api/admin/tasks').then(r => r.data),
+    getPayments: () =>
+        api.get<AdminPayment[]>('/api/admin/payments').then(r => r.data),
     updateUserRole: (id: string, role: AdminUser['role']) =>
         api.patch<AdminUser>(`/api/admin/users/${id}/role`, { role }).then(r => r.data),
     updateTeamPublication: (id: string, published: boolean) =>

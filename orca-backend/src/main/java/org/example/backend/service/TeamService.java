@@ -257,6 +257,9 @@ public class TeamService {
      */
     @Transactional
     public TeamDTO joinByCode(String inviteCode, String username) {
+        throw new RuntimeException("Luồng tham gia bằng mã mời chung đã bị vô hiệu hóa. Vui lòng dùng lời mời qua email hoặc liên hệ chủ nhóm.");
+
+        /*
         Team team = teamRepository.findByInviteCode(inviteCode.toUpperCase())
                 .orElseThrow(() -> new RuntimeException("Mã mời không hợp lệ hoặc không tồn tại"));
 
@@ -275,6 +278,7 @@ public class TeamService {
         teamMemberRepository.save(tm);
 
         return toDTO(team, false);
+        */
     }
 
     // === Helper: Entity → DTO ===

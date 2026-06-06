@@ -164,6 +164,16 @@
   border: 1px solid var(--shell-border);
   border-radius: 8px;
   background: var(--shell-surface-soft);
+  cursor: pointer;
+  outline: none;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.dashboard-team-card:hover,
+.dashboard-team-card:focus-visible {
+  border-color: var(--shell-accent);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.24);
+  transform: translateY(-2px);
 }
 
 .dashboard-team-card img {

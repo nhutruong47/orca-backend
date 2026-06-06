@@ -2550,94 +2550,16 @@ body.luxury-home-page {
   text-decoration: none;
 }
 
-.coffee-nav__offer {
-  min-height: 66px;
-  display: grid;
-  grid-template-columns: minmax(190px, 1fr) auto minmax(190px, 1fr);
-  align-items: center;
-  gap: 24px;
-  padding: 10px clamp(18px, 4vw, 64px);
-  background: rgba(31, 31, 31, 0.98);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
-}
-
-.coffee-nav__market {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  justify-self: start;
-  font-size: clamp(1.2rem, 2vw, 1.72rem);
-  font-weight: 400;
-  letter-spacing: -0.04em;
-}
-
-.coffee-nav__market strong {
-  color: #f5f5f5;
-  font-weight: 850;
-}
-
-.coffee-nav__market span:last-child {
-  color: rgba(255, 255, 255, 0.82);
-}
-
-.coffee-nav__market-mark {
-  width: 27px;
-  height: 27px;
-  margin-right: 4px;
-  display: inline-grid;
-  place-items: center;
-  color: #111;
-  background: #84c441;
-  border-radius: 7px 2px 7px 2px;
-  font-size: 0.62rem;
-  font-weight: 900;
-  letter-spacing: -0.08em;
-  transform: skew(-9deg);
-}
-
-.coffee-nav__offer p {
-  margin: 0;
-  justify-self: center;
-  color: rgba(255, 255, 255, 0.92);
-  font-size: clamp(0.92rem, 1.55vw, 1.22rem);
-  font-weight: 520;
-  text-align: center;
-}
-
-.coffee-nav__offer p strong {
-  color: #fff;
-  font-weight: 900;
-}
-
-.coffee-nav__offer button {
-  justify-self: end;
-  min-height: 41px;
-  padding: 0 26px;
-  color: #22320c;
-  background: #85bd3a;
-  border-radius: 5px;
-  font-size: 0.94rem;
-  font-weight: 650;
-  cursor: pointer;
-  transition: transform 180ms ease, background 180ms ease;
-}
-
-.coffee-nav__offer button:hover {
-  background: #96cd44;
-  transform: translateY(-1px);
-}
-
 .coffee-nav__inner {
-  min-height: 142px;
+  min-height: 92px;
   display: grid;
-  grid-template-columns: minmax(220px, 28vw) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(176px, 20vw) minmax(0, 1fr) auto;
   align-items: stretch;
   padding: 0 clamp(20px, 6vw, 128px);
-  background:
-    linear-gradient(90deg, rgba(11, 8, 7, 0.8), rgba(30, 19, 14, 0.68)),
-    rgba(17, 12, 10, 0.72);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(12px);
+  background: rgba(10, 7, 5, 0.26);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 0;
+  backdrop-filter: blur(10px);
 }
 
 .coffee-nav__brand {
@@ -2645,7 +2567,7 @@ body.luxury-home-page {
   align-self: center;
   display: inline-flex;
   align-items: center;
-  gap: 15px;
+  gap: 10px;
   min-width: 0;
   color: #fff;
   background: transparent;
@@ -2667,7 +2589,7 @@ body.luxury-home-page {
 
 .coffee-nav__brand strong {
   display: block;
-  font-size: clamp(1.38rem, 2.3vw, 2.08rem);
+  font-size: clamp(1.08rem, 1.55vw, 1.48rem);
   font-weight: 950;
   letter-spacing: 0.01em;
 }
@@ -2689,13 +2611,13 @@ body.luxury-home-page {
 }
 
 .coffee-nav__links .coffee-nav__item {
-  min-width: clamp(96px, 7.5vw, 132px);
+  min-width: clamp(112px, 8.2vw, 148px);
   padding: 0 14px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 0;
   color: rgba(255, 255, 255, 0.66);
   background: transparent;
   border-radius: 0;
@@ -2721,42 +2643,45 @@ body.luxury-home-page {
   font-weight: 800;
   letter-spacing: 0;
   text-transform: none;
-}
-
-.coffee-nav__item small {
-  color: currentColor;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(0.9rem, 1.15vw, 1.08rem);
-  font-weight: 500;
-  opacity: 0.72;
-  letter-spacing: 0;
   white-space: nowrap;
 }
 
-.coffee-nav__social {
+.coffee-nav__auth {
   justify-self: end;
-  align-self: stretch;
+  align-self: center;
   display: flex;
-  align-items: stretch;
-  gap: 10px;
+  align-items: center;
+  gap: 12px;
 }
 
-.coffee-nav__social a {
-  width: clamp(48px, 4vw, 58px);
-  display: grid;
-  place-items: center;
-  color: rgba(255, 255, 255, 0.86);
-  background: rgba(255, 255, 255, 0.055);
-  border-left: 1px solid rgba(255, 255, 255, 0.05);
-  border-right: 1px solid rgba(255, 255, 255, 0.04);
-  font-size: 1.85rem;
-  font-weight: 850;
-  transition: color 180ms ease, background 180ms ease;
+.coffee-nav__auth button {
+  min-height: 44px;
+  padding: 0 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff7ea;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  font-size: 0.98rem;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 180ms ease, background 180ms ease, border-color 180ms ease, transform 180ms ease;
 }
 
-.coffee-nav__social a:hover {
+.coffee-nav__auth button:hover {
   color: #fff;
-  background: rgba(164, 109, 63, 0.34);
+  background: rgba(164, 109, 63, 0.28);
+  border-color: rgba(255, 255, 255, 0.24);
+  transform: translateY(-1px);
+}
+
+.coffee-nav__auth button:last-child {
+  color: #24140d;
+  background: #fff7ea;
+  border-color: #fff7ea;
 }
 
 .coffee-nav.coffee-nav--scrolled,
@@ -2783,12 +2708,12 @@ body.luxury-home-page {
 @media (max-width: 1180px) {
   .coffee-nav__inner {
     grid-template-columns: auto minmax(0, 1fr);
-    min-height: 122px;
+    min-height: 86px;
     padding-inline: 20px;
   }
 
-  .coffee-nav__social {
-    display: none;
+  .coffee-nav__auth {
+    justify-self: end;
   }
 
   .coffee-nav__links {
@@ -2797,70 +2722,58 @@ body.luxury-home-page {
 }
 
 @media (max-width: 860px) {
-  .coffee-nav__offer {
-    grid-template-columns: 1fr auto;
-    min-height: 58px;
-    gap: 12px;
-  }
-
-  .coffee-nav__offer p {
-    display: none;
-  }
-
   .coffee-nav__inner {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr auto;
     gap: 0;
-    min-height: 148px;
+    min-height: 118px;
     padding: 10px 14px 0;
   }
 
   .coffee-nav__brand {
     justify-self: start;
-    min-height: 58px;
+    min-height: 46px;
   }
 
   .coffee-nav__links {
     justify-self: stretch;
     justify-content: flex-start;
+    grid-column: 1 / -1;
   }
 
   .coffee-nav__links .coffee-nav__item {
-    min-width: 98px;
-    min-height: 80px;
+    min-width: 112px;
+    min-height: 66px;
     padding-inline: 12px;
-    gap: 8px;
+    gap: 0;
   }
 
   .coffee-hero {
-    padding-top: 220px;
+    padding-top: 160px;
   }
 }
 
 @media (max-width: 520px) {
-  .coffee-nav__offer {
-    padding-inline: 14px;
+  .coffee-nav__auth {
+    gap: 8px;
   }
 
-  .coffee-nav__market {
-    font-size: 1.1rem;
-  }
-
-  .coffee-nav__offer button {
-    padding-inline: 14px;
+  .coffee-nav__auth button {
+    min-height: 38px;
+    padding-inline: 10px;
     font-size: 0.84rem;
   }
 
   .coffee-nav__brand svg {
-    width: 36px;
-    height: 36px;
+    width: 30px;
+    height: 30px;
   }
 
   .coffee-nav__brand strong {
-    font-size: 1.22rem;
+    font-size: 1rem;
   }
 
   .coffee-nav__links .coffee-nav__item {
-    min-width: 88px;
+    min-width: 104px;
   }
 }
 

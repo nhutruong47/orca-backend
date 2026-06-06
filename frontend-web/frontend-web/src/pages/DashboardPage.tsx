@@ -47,6 +47,9 @@ export default function DashboardPage() {
     const completedTasks = useMemo(() => myTasks.filter(task => task.status === 'COMPLETED'), [myTasks]);
     const progress = myTasks.length ? Math.round((completedTasks.length / myTasks.length) * 100) : 0;
     const recentTasks = myTasks.slice(0, 5);
+    const openTeamWorkspace = (teamId: string | number) => {
+        navigate(`/groups/${teamId}`);
+    };
 
     if (loading) {
         return (
@@ -104,7 +107,20 @@ export default function DashboardPage() {
                 {teams.length > 0 ? (
                     <div className="dashboard-team-grid">
                         {teams.slice(0, 3).map((team, index) => (
-                            <article className="dashboard-team-card" key={team.id}>
+                            <article
+                                className="dashboard-team-card"
+                                key={team.id}
+                                role="button"
+                                tabIndex={0}
+                                onClick={() => openTeamWorkspace(team.id)}
+                                onKeyDown={(event) => {
+                                    if (event.key === 'Enter' || event.key === ' ') {
+                                        event.preventDefault();
+                                        openTeamWorkspace(team.id);
+                                    }
+                                }}
+                                aria-label={`Mở nơi làm việc của nhóm ${team.name}`}
+                            >
                                 <img src={teamImages[index % teamImages.length]} alt={team.name} />
                                 <div>
                                     <h3>{team.name}</h3>

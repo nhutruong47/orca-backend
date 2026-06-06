@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Activity,
   AlertTriangle,
@@ -52,6 +53,8 @@ import {
   YAxis
 } from 'recharts';
 import { useAuth } from '../context/AuthContext';
+import { adminService } from '../services/adminService';
+import type { AdminOrder, AdminOverview, AdminPayment, AdminTask, AdminTeam, AdminUser } from '../types/types';
 import './AdminPage.css';
 
 type AdminSection =
@@ -74,11 +77,6 @@ const money = (value: number) =>
 
 const number = (value: number) => new Intl.NumberFormat('vi-VN').format(value);
 
-const parseVietnameseDate = (value: string) => {
-  const [day, month, year] = value.split('/').map(Number);
-  return new Date(year, month - 1, day);
-};
-
 const parseDateInput = (value: string, endOfDay = false) => {
   const date = new Date(`${value}T${endOfDay ? '23:59:59' : '00:00:00'}`);
   return Number.isNaN(date.getTime()) ? new Date() : date;
@@ -100,93 +98,104 @@ const tabs: Array<{ id: AdminSection; label: string; icon: React.ElementType }> 
   { id: 'reports', label: 'Executive Report', icon: FileBarChart }
 ];
 
-const kpis = [
-  { label: 'Doanh nghiệp / xưởng', value: '128', change: '+12.4%', icon: Building2, tone: 'coffee' },
-  { label: 'Tổng người dùng', value: '8,420', change: '+18.1%', icon: Users, tone: 'blue' },
-  { label: 'Đơn đang xử lý', value: '1,284', change: '+6.8%', icon: ShoppingCart, tone: 'amber' },
-  { label: 'Batch sản xuất', value: '18,930', change: '+22.7%', icon: GitBranch, tone: 'green' },
-  { label: 'Nhân viên hoạt động', value: '3,486', change: '+9.2%', icon: UserCheck, tone: 'violet' },
-  { label: 'Doanh thu tháng', value: money(824000000), change: '+15.3%', icon: DollarSign, tone: 'green' },
-  { label: 'Doanh thu năm', value: money(8120000000), change: '+31.8%', icon: DollarSign, tone: 'coffee' },
-  { label: 'Tăng trưởng user', value: '18.1%', change: '+4.2%', icon: ArrowUpDown, tone: 'blue' },
-  { label: 'Tăng trưởng DN', value: '12.4%', change: '+2.8%', icon: Building2, tone: 'amber' },
-  { label: 'Đơn đúng hạn', value: '94.6%', change: '+1.7%', icon: Percent, tone: 'green' },
-  { label: 'QC đạt', value: '97.2%', change: '+0.9%', icon: CheckCircle2, tone: 'green' },
-  { label: 'Sử dụng hệ thống', value: '76.8%', change: '+8.4%', icon: Gauge, tone: 'violet' }
+type KpiTone = 'coffee' | 'blue' | 'amber' | 'green' | 'violet';
+
+type KpiItem = {
+  label: string;
+  value: string;
+  detail: string;
+  icon: React.ElementType;
+  tone: KpiTone;
+};
+
+const emptyOverview: AdminOverview = {
+  totalUsers: 0,
+  adminUsers: 0,
+  memberUsers: 0,
+  newUsersThisMonth: 0,
+  newUsersPreviousMonth: 0,
+  totalTeams: 0,
+  publishedTeams: 0,
+  newTeamsThisMonth: 0,
+  newTeamsPreviousMonth: 0,
+  totalGoals: 0,
+  activeGoals: 0,
+  totalTasks: 0,
+  completedTasks: 0,
+  overdueTasks: 0,
+  totalOrders: 0,
+  activeOrders: 0,
+  totalProductionOrders: 0,
+  activeProductionOrders: 0,
+  overdueProductionOrders: 0,
+  totalBatches: 0,
+  activeBatches: 0,
+  completedBatches: 0,
+  paidPayments: 0,
+  totalPayments: 0,
+  revenueThisMonth: 0,
+  revenuePreviousMonth: 0,
+  revenueThisYear: 0,
+  revenuePreviousYear: 0,
+  revenueTotal: 0,
+  orderStatusCounts: {},
+  productionOrderStatusCounts: {},
+  batchStatusCounts: {},
+  taskStatusCounts: {},
+  recentUsers: [],
+  recentTeams: [],
+};
+
+const realDataNote = 'Từ dữ liệu hệ thống';
+
+const percentValue = (part: number, total: number) => total > 0 ? `${((part / total) * 100).toFixed(1)}%` : '0%';
+
+const periodChangeNote = (current: number, previous: number, period = 'tháng trước') => {
+  if (previous <= 0) return realDataNote;
+  const change = ((current - previous) / previous) * 100;
+  return `${change >= 0 ? '+' : ''}${change.toFixed(1)}% so với ${period}`;
+};
+
+const getDate = (value: string | null | undefined) => {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const sameMonth = (value: string | null | undefined, monthDate: Date) => {
+  const date = getDate(value);
+  return Boolean(date && date.getFullYear() === monthDate.getFullYear() && date.getMonth() === monthDate.getMonth());
+};
+
+const paymentDate = (payment: AdminPayment) => getDate(payment.paidAt || payment.createdAt);
+
+const formatShortDate = (value: Date | string | null | undefined) => {
+  const date = value instanceof Date ? value : getDate(value);
+  return date ? date.toLocaleDateString('vi-VN') : '-';
+};
+
+const paymentCustomerName = (payment: AdminPayment) =>
+  payment.fullName || payment.username || payment.email || 'Không rõ người dùng';
+
+const buildKpis = (overview: AdminOverview): KpiItem[] => [
+  { label: 'Doanh nghiệp / xưởng', value: number(overview.totalTeams), detail: realDataNote, icon: Building2, tone: 'coffee' },
+  { label: 'Tổng người dùng', value: number(overview.totalUsers), detail: realDataNote, icon: Users, tone: 'blue' },
+  { label: 'Đơn đang xử lý', value: number(overview.activeOrders + overview.activeProductionOrders), detail: 'Đơn liên xưởng + đơn sản xuất', icon: ShoppingCart, tone: 'amber' },
+  { label: 'Batch sản xuất', value: number(overview.totalBatches), detail: `${number(overview.activeBatches)} batch đang chạy`, icon: GitBranch, tone: 'green' },
+  { label: 'Tài khoản nhân viên', value: number(overview.memberUsers), detail: `${number(overview.adminUsers)} admin`, icon: UserCheck, tone: 'violet' },
+  { label: 'Doanh thu tháng', value: money(overview.revenueThisMonth), detail: periodChangeNote(overview.revenueThisMonth, overview.revenuePreviousMonth), icon: DollarSign, tone: 'green' },
+  { label: 'Doanh thu năm', value: money(overview.revenueThisYear), detail: periodChangeNote(overview.revenueThisYear, overview.revenuePreviousYear, 'năm trước'), icon: DollarSign, tone: 'coffee' },
+  { label: 'User mới tháng này', value: number(overview.newUsersThisMonth), detail: periodChangeNote(overview.newUsersThisMonth, overview.newUsersPreviousMonth), icon: ArrowUpDown, tone: 'blue' },
+  { label: 'Xưởng mới tháng này', value: number(overview.newTeamsThisMonth), detail: periodChangeNote(overview.newTeamsThisMonth, overview.newTeamsPreviousMonth), icon: Building2, tone: 'amber' },
+  { label: 'Công việc hoàn thành', value: percentValue(overview.completedTasks, overview.totalTasks), detail: `${number(overview.completedTasks)}/${number(overview.totalTasks)} task`, icon: Percent, tone: 'green' },
+  { label: 'Việc quá hạn', value: number(overview.overdueTasks + overview.overdueProductionOrders), detail: 'Task + đơn sản xuất quá hạn', icon: AlertTriangle, tone: 'amber' },
+  { label: 'Mục tiêu đang chạy', value: number(overview.activeGoals), detail: `${number(overview.totalGoals)} mục tiêu tổng`, icon: Gauge, tone: 'violet' }
 ];
-
-const monthlyRevenue = [
-  { month: 'T1', revenue: 420, mrr: 310, users: 520, orgs: 32, batches: 980 },
-  { month: 'T2', revenue: 510, mrr: 355, users: 680, orgs: 45, batches: 1190 },
-  { month: 'T3', revenue: 590, mrr: 390, users: 840, orgs: 52, batches: 1380 },
-  { month: 'T4', revenue: 640, mrr: 438, users: 1090, orgs: 64, batches: 1660 },
-  { month: 'T5', revenue: 720, mrr: 500, users: 1320, orgs: 80, batches: 1890 },
-  { month: 'T6', revenue: 824, mrr: 572, users: 1580, orgs: 96, batches: 2240 }
-];
-
-const businesses = [
-  ['Highlands Craft', 'ORC-BIZ-001', 'Nguyen Minh An', 'owner@highlands.vn', '0901234567', 84, 420, 1180, 'Enterprise', '12/01/2026', 'Active'],
-  ['Da Lat Roastery', 'ORC-BIZ-002', 'Tran Bao Lam', 'ops@dalat.vn', '0912223344', 36, 210, 640, 'Growth', '02/02/2026', 'Active'],
-  ['Saigon Roast Lab', 'ORC-BIZ-003', 'Le Hoang', 'hello@roastlab.vn', '0988877665', 18, 82, 210, 'Starter', '18/03/2026', 'Trial'],
-  ['Ancient Grain', 'ORC-BIZ-004', 'Pham Quynh', 'admin@ancient.vn', '0934567788', 52, 310, 890, 'Growth', '21/04/2026', 'Locked'],
-  ['Coastal Coffee Hub', 'ORC-BIZ-005', 'Do Thanh', 'finance@coastal.vn', '0977135791', 27, 168, 404, 'Growth', '09/05/2026', 'Active']
-].map(([name, code, owner, email, phone, employees, orders, batches, plan, date, status]) => ({
-  name,
-  code,
-  owner,
-  email,
-  phone,
-  employees,
-  orders,
-  batches,
-  plan,
-  date,
-  status
-}));
-
-const users = Array.from({ length: 18 }, (_, index) => {
-  const roles = ['Admin', 'Business Owner', 'Manager', 'Staff'];
-  const orgs = ['Highlands Craft', 'Da Lat Roastery', 'Saigon Roast Lab', 'Ancient Grain'];
-  return {
-    name: ['An Nguyen', 'Bao Tran', 'Chi Le', 'Duy Pham', 'Hanh Do', 'Khoa Vo'][index % 6],
-    email: `user${index + 1}@orca.local`,
-    phone: `09${(12345678 + index * 23817).toString().slice(0, 8)}`,
-    company: orgs[index % orgs.length],
-    role: roles[index % roles.length],
-    status: index % 7 === 0 ? 'Locked' : 'Active',
-    lastLogin: `${(index % 9) + 1} giờ trước`
-  };
-});
 
 const plans = [
   { name: 'Starter', price: 499000, period: 'Tháng', users: 5, orders: 100, batches: 300, workshops: 1, ai: 5000, features: ['Order board', 'Batch tracking', 'Basic reports'] },
   { name: 'Growth', price: 1499000, period: 'Tháng', users: 30, orders: 1000, batches: 5000, workshops: 5, ai: 40000, features: ['QC workflow', 'AI assistant', 'Billing export'] },
   { name: 'Enterprise', price: 0, period: 'Năm', users: 500, orders: 99999, batches: 99999, workshops: 50, ai: 500000, features: ['SLA', 'Custom workflow', 'Dedicated AI limit'] }
-];
-
-const invoices = [
-  ['INV-2026-0001', 'Highlands Craft', 'Enterprise', 24500000, '03/05/2026', 'VNPay', 'Paid'],
-  ['INV-2026-0002', 'Da Lat Roastery', 'Growth', 1499000, '07/05/2026', 'Bank Transfer', 'Paid'],
-  ['INV-2026-0003', 'Saigon Roast Lab', 'Starter', 499000, '11/05/2026', 'VNPay', 'Pending'],
-  ['INV-2026-0004', 'Ancient Grain', 'Growth', 1499000, '15/05/2026', 'Card', 'Failed'],
-  ['INV-2026-0005', 'Coastal Coffee Hub', 'Growth', 1499000, '19/05/2026', 'VNPay', 'Paid'],
-  ['INV-2026-0006', 'Highlands Craft', 'Enterprise', 24500000, '24/05/2026', 'Bank Transfer', 'Paid'],
-  ['INV-2026-0007', 'Da Lat Roastery', 'Growth', 1499000, '30/05/2026', 'VNPay', 'Paid'],
-  ['INV-2026-0008', 'Saigon Roast Lab', 'Starter', 499000, '02/06/2026', 'VNPay', 'Paid'],
-  ['INV-2026-0009', 'Ancient Grain', 'Growth', 1499000, '08/06/2026', 'Card', 'Pending'],
-  ['INV-2026-0010', 'Coastal Coffee Hub', 'Growth', 1499000, '12/06/2026', 'Bank Transfer', 'Paid'],
-  ['INV-2026-0011', 'Highlands Craft', 'Enterprise', 24500000, '18/06/2026', 'VNPay', 'Paid'],
-  ['INV-2026-0012', 'Da Lat Roastery', 'Growth', 1499000, '22/06/2026', 'Card', 'Failed']
-].map(([id, company, plan, amount, date, method, status]) => ({ id, company, plan, amount, date, method, status }));
-
-const aiUsage = [
-  { label: 'Tổng request AI', value: number(482930), icon: Brain },
-  { label: 'Request hôm nay', value: number(14820), icon: Activity },
-  { label: 'Request tháng', value: number(128400), icon: CalendarDays },
-  { label: 'Token sử dụng', value: '92.4M', icon: Gauge },
-  { label: 'Chi phí AI', value: money(43800000), icon: DollarSign },
-  { label: 'User dùng nhiều nhất', value: 'Bao Tran', icon: Users },
-  { label: 'DN dùng nhiều nhất', value: 'Highlands', icon: Building2 }
 ];
 
 const systemMetrics = [
@@ -233,7 +242,7 @@ const featureRows = [
   'Dedicated support'
 ];
 
-function KpiCard({ item }: { item: typeof kpis[number] }) {
+function KpiCard({ item }: { item: KpiItem }) {
   const Icon = item.icon;
   return (
     <article className={`admin-kpi admin-kpi-${item.tone}`}>
@@ -241,7 +250,7 @@ function KpiCard({ item }: { item: typeof kpis[number] }) {
       <div>
         <span>{item.label}</span>
         <strong>{item.value}</strong>
-        <small>{item.change} so với kỳ trước</small>
+        <small>{item.detail}</small>
       </div>
     </article>
   );
@@ -275,7 +284,17 @@ function StatusBadge({ value }: { value: string }) {
 
 export default function AdminPage() {
   const { user } = useAuth();
-  const [active, setActive] = useState<AdminSection>('overview');
+  const [searchParams] = useSearchParams();
+  const sectionParam = searchParams.get('section') as AdminSection | null;
+  const active: AdminSection = tabs.some(tab => tab.id === sectionParam) ? sectionParam! : 'overview';
+  const [overview, setOverview] = useState<AdminOverview>(emptyOverview);
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
+  const [adminTeams, setAdminTeams] = useState<AdminTeam[]>([]);
+  const [adminOrders, setAdminOrders] = useState<AdminOrder[]>([]);
+  const [adminTasks, setAdminTasks] = useState<AdminTask[]>([]);
+  const [adminPayments, setAdminPayments] = useState<AdminPayment[]>([]);
+  const [adminLoading, setAdminLoading] = useState(true);
+  const [adminError, setAdminError] = useState('');
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('All');
   const [plan, setPlan] = useState('All');
@@ -285,14 +304,94 @@ export default function AdminPage() {
   const [workflowStages, setWorkflowStages] = useState(['Order', 'Assignment', 'Production', 'QC', 'Packaging', 'Delivery']);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
 
-  const userRows = useMemo(() => {
-    return users
-      .filter(item => `${item.name} ${item.email} ${item.company} ${item.role}`.toLowerCase().includes(query.toLowerCase()))
-      .slice((userPage - 1) * 6, userPage * 6);
-  }, [query, userPage]);
+  useEffect(() => {
+    if (user?.role !== 'ADMIN') {
+      setAdminLoading(false);
+      return;
+    }
 
-  const businessRows = businesses.filter(item => {
-    const matchesText = `${item.name} ${item.code} ${item.owner} ${item.email}`.toLowerCase().includes(query.toLowerCase());
+    setAdminLoading(true);
+    setAdminError('');
+    Promise.all([
+      adminService.getOverview(),
+      adminService.getUsers(),
+      adminService.getTeams(),
+      adminService.getOrders(),
+      adminService.getTasks(),
+      adminService.getPayments(),
+    ])
+      .then(([overviewData, userData, teamData, orderData, taskData, paymentData]) => {
+        setOverview({ ...emptyOverview, ...overviewData });
+        setAdminUsers(userData || []);
+        setAdminTeams(teamData || []);
+        setAdminOrders(orderData || []);
+        setAdminTasks(taskData || []);
+        setAdminPayments(paymentData || []);
+      })
+      .catch(() => {
+        setAdminError('Không tải được thống kê thật từ hệ thống.');
+      })
+      .finally(() => setAdminLoading(false));
+  }, [user?.role]);
+
+  const kpis = useMemo(() => buildKpis(overview), [overview]);
+
+  const systemTrendData = useMemo(() => {
+    const now = new Date();
+    return Array.from({ length: 6 }, (_, offset) => {
+      const monthDate = new Date(now.getFullYear(), now.getMonth() - (5 - offset), 1);
+      return {
+        month: `T${monthDate.getMonth() + 1}`,
+        users: adminUsers.filter(item => sameMonth(item.createdAt, monthDate)).length,
+        teams: adminTeams.filter(item => sameMonth(item.createdAt, monthDate)).length,
+        orders: adminOrders.filter(item => sameMonth(item.createdAt, monthDate)).length,
+        tasks: adminTasks.filter(item => sameMonth(item.createdAt, monthDate)).length,
+      };
+    });
+  }, [adminUsers, adminTeams, adminOrders, adminTasks]);
+
+  const aiUsage = useMemo(() => {
+    const paidUsers = adminUsers.filter(item => item.aiPlan && item.aiPlan !== 'free');
+    const freeUsers = adminUsers.filter(item => !item.aiPlan || item.aiPlan === 'free');
+    const planCount = new Set(adminUsers.map(item => item.aiPlan || 'free')).size;
+    return [
+      { label: 'Tổng user', value: number(adminUsers.length), icon: Users },
+      { label: 'User có gói AI', value: number(paidUsers.length), icon: Brain },
+      { label: 'User gói free', value: number(freeUsers.length), icon: Gauge },
+      { label: 'Loại gói đang có', value: number(planCount), icon: ReceiptText },
+    ];
+  }, [adminUsers]);
+
+  const userRows = useMemo(() => {
+    return adminUsers
+      .map(item => ({
+        id: item.id,
+        name: item.fullName || item.username,
+        email: item.email,
+        phone: item.chipId || '-',
+        company: '-',
+        role: item.role,
+        status: item.aiPlan || 'free',
+        lastLogin: item.createdAt ? formatShortDate(item.createdAt) : '-'
+      }))
+      .filter(item => `${item.name} ${item.email} ${item.role}`.toLowerCase().includes(query.toLowerCase()))
+      .slice((userPage - 1) * 6, userPage * 6);
+  }, [adminUsers, query, userPage]);
+
+  const businessRows = adminTeams.map(item => ({
+    name: item.name,
+    code: item.id.slice(0, 8),
+    owner: item.ownerName || '-',
+    email: '-',
+    phone: '-',
+    employees: item.memberCount,
+    orders: item.totalOrders,
+    batches: 0,
+    plan: '-',
+    date: item.createdAt ? formatShortDate(item.createdAt) : '-',
+    status: item.published ? 'Published' : 'Private'
+  })).filter(item => {
+    const matchesText = `${item.name} ${item.code} ${item.owner}`.toLowerCase().includes(query.toLowerCase());
     const matchesStatus = status === 'All' || item.status === status;
     const matchesPlan = plan === 'All' || item.plan === plan;
     return matchesText && matchesStatus && matchesPlan;
@@ -303,27 +402,31 @@ export default function AdminPage() {
     const toDate = parseDateInput(revenueTo, true);
     const safeFrom = fromDate <= toDate ? fromDate : toDate;
     const safeTo = fromDate <= toDate ? toDate : fromDate;
-    const rangeInvoices = invoices.filter(item => {
-      const paidDate = parseVietnameseDate(String(item.date));
-      return paidDate >= safeFrom && paidDate <= safeTo;
+    const rangePayments = adminPayments.filter(item => {
+      const date = paymentDate(item);
+      return Boolean(date && date >= safeFrom && date <= safeTo);
     });
-    const paidInvoices = rangeInvoices.filter(item => item.status === 'Paid');
-    const total = paidInvoices.reduce((sum, item) => sum + Number(item.amount), 0);
-    const pending = rangeInvoices
-      .filter(item => item.status === 'Pending')
+    const paidPayments = rangePayments.filter(item => item.status === 'PAID');
+    const total = paidPayments.reduce((sum, item) => sum + Number(item.amount), 0);
+    const pending = rangePayments
+      .filter(item => item.status === 'PENDING')
       .reduce((sum, item) => sum + Number(item.amount), 0);
-    const failed = rangeInvoices
-      .filter(item => item.status === 'Failed')
+    const failed = rangePayments
+      .filter(item => item.status === 'FAILED')
       .reduce((sum, item) => sum + Number(item.amount), 0);
-    const dailyMap = paidInvoices.reduce<Record<string, number>>((acc, item) => {
-      acc[String(item.date)] = (acc[String(item.date)] || 0) + Number(item.amount);
+    const dailyMap = paidPayments.reduce<Record<string, { amount: number; time: number }>>((acc, item) => {
+      const date = paymentDate(item);
+      const dateKey = formatShortDate(date);
+      const current = acc[dateKey] || { amount: 0, time: date?.getTime() || 0 };
+      acc[dateKey] = { amount: current.amount + Number(item.amount), time: current.time };
       return acc;
     }, {});
     const timeline = Object.entries(dailyMap)
-      .map(([date, amount]) => ({ date, revenue: Math.round(amount / 1000000) }))
-      .sort((a, b) => parseVietnameseDate(a.date).getTime() - parseVietnameseDate(b.date).getTime());
-    const customerMap = paidInvoices.reduce<Record<string, number>>((acc, item) => {
-      acc[String(item.company)] = (acc[String(item.company)] || 0) + Number(item.amount);
+      .map(([date, data]) => ({ date, revenue: Math.round(data.amount / 1000000), time: data.time }))
+      .sort((a, b) => a.time - b.time);
+    const customerMap = paidPayments.reduce<Record<string, number>>((acc, item) => {
+      const name = paymentCustomerName(item);
+      acc[name] = (acc[name] || 0) + Number(item.amount);
       return acc;
     }, {});
     const topCustomers = Object.entries(customerMap)
@@ -335,8 +438,8 @@ export default function AdminPage() {
     return {
       fromDate: safeFrom,
       toDate: safeTo,
-      rangeInvoices,
-      paidInvoices,
+      rangeInvoices: rangePayments,
+      paidInvoices: paidPayments,
       total,
       pending,
       failed,
@@ -345,7 +448,7 @@ export default function AdminPage() {
       topCustomers,
       timeline: timeline.length > 0 ? timeline : [{ date: 'Không có', revenue: 0 }],
     };
-  }, [revenueFrom, revenueTo]);
+  }, [adminPayments, revenueFrom, revenueTo]);
 
   const exportRevenueReport = () => {
     const lines = [
@@ -357,7 +460,7 @@ export default function AdminPage() {
       `That bai: ${money(revenueReport.failed)}`,
       '',
       'Hoa don:',
-      ...revenueReport.rangeInvoices.map(item => `${item.id}, ${item.company}, ${item.plan}, ${money(Number(item.amount))}, ${item.date}, ${item.method}, ${item.status}`),
+      ...revenueReport.rangeInvoices.map(item => `${item.txnRef}, ${paymentCustomerName(item)}, ${item.planId}, ${money(Number(item.amount))}, ${formatShortDate(paymentDate(item))}, ${item.bankCode || '-'}, ${item.status}`),
     ];
     const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -388,6 +491,26 @@ export default function AdminPage() {
     );
   }
 
+  if (adminLoading) {
+    return (
+      <div className="admin-access">
+        <Activity size={40} />
+        <h1>Đang tải thống kê hệ thống</h1>
+        <p>ORCA đang lấy số liệu thật từ cơ sở dữ liệu.</p>
+      </div>
+    );
+  }
+
+  if (adminError) {
+    return (
+      <div className="admin-access">
+        <AlertTriangle size={40} />
+        <h1>Không tải được thống kê</h1>
+        <p>{adminError}</p>
+      </div>
+    );
+  }
+
   return (
     <div className="admin-console">
       <header className="admin-hero">
@@ -402,27 +525,15 @@ export default function AdminPage() {
         </div>
       </header>
 
-      <nav className="admin-nav" aria-label="Admin sections">
-        {tabs.map(tab => {
-          const Icon = tab.icon;
-          return (
-            <button key={tab.id} className={active === tab.id ? 'active' : ''} onClick={() => setActive(tab.id)} type="button">
-              <Icon size={16} />
-              <span>{tab.label}</span>
-            </button>
-          );
-        })}
-      </nav>
-
       {active === 'overview' && (
         <>
           <section className="admin-kpi-grid">
             {kpis.map(item => <KpiCard key={item.label} item={item} />)}
           </section>
           <section className="admin-grid-2">
-            <ChartPanel title="Biểu đồ doanh thu">
+            <ChartPanel title="Đơn phát sinh theo tháng">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={monthlyRevenue}>
+                <AreaChart data={systemTrendData}>
                   <defs>
                     <linearGradient id="revenueFill" x1="0" x2="0" y1="0" y2="1">
                       <stop offset="0%" stopColor="#d4a574" stopOpacity={0.45} />
@@ -433,13 +544,13 @@ export default function AdminPage() {
                   <XAxis dataKey="month" />
                   <YAxis />
                   <Tooltip />
-                  <Area dataKey="revenue" stroke="#d4a574" fill="url(#revenueFill)" strokeWidth={3} />
+                  <Area dataKey="orders" stroke="#d4a574" fill="url(#revenueFill)" strokeWidth={3} />
                 </AreaChart>
               </ResponsiveContainer>
             </ChartPanel>
-            <ChartPanel title="Tăng trưởng user">
+            <ChartPanel title="User mới theo tháng">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={monthlyRevenue}>
+                <LineChart data={systemTrendData}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="month" />
                   <YAxis />
@@ -448,25 +559,25 @@ export default function AdminPage() {
                 </LineChart>
               </ResponsiveContainer>
             </ChartPanel>
-            <ChartPanel title="Tăng trưởng doanh nghiệp">
+            <ChartPanel title="Xưởng mới theo tháng">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={monthlyRevenue}>
+                <BarChart data={systemTrendData}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="month" />
                   <YAxis />
                   <Tooltip />
-                  <Bar dataKey="orgs" fill="#8b5cf6" radius={[8, 8, 0, 0]} />
+                  <Bar dataKey="teams" fill="#8b5cf6" radius={[8, 8, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </ChartPanel>
-            <ChartPanel title="Sản lượng batch">
+            <ChartPanel title="Công việc tạo theo tháng">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={monthlyRevenue}>
+                <BarChart data={systemTrendData}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="month" />
                   <YAxis />
                   <Tooltip />
-                  <Bar dataKey="batches" fill="#22c55e" radius={[8, 8, 0, 0]} />
+                  <Bar dataKey="tasks" fill="#22c55e" radius={[8, 8, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </ChartPanel>
@@ -589,7 +700,7 @@ export default function AdminPage() {
             <ChartPanel title="Biểu đồ doanh thu theo ngày"><ResponsiveContainer width="100%" height="100%"><AreaChart data={revenueReport.timeline}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="date" /><YAxis /><Tooltip formatter={(value) => [`${value} triệu`, 'Doanh thu']} /><Area dataKey="revenue" stroke="#d4a574" fill="#d4a57433" strokeWidth={3} /></AreaChart></ResponsiveContainer></ChartPanel>
             <ChartPanel title="Top khách hàng theo khoảng ngày">{revenueReport.topCustomers.length > 0 ? <ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={revenueReport.topCustomers} dataKey="value" nameKey="name" outerRadius={92}>{revenueReport.topCustomers.map((_, index) => <Cell key={index} fill={['#d4a574', '#60a5fa', '#22c55e', '#8b5cf6', '#f97316'][index]} />)}</Pie><Tooltip formatter={(value) => [`${value} triệu`, 'Doanh thu']} /></PieChart></ResponsiveContainer> : <div className="admin-chart-empty">Không có doanh thu trong khoảng ngày đã chọn.</div>}</ChartPanel>
           </section>
-          <section className="admin-card"><div className="admin-card-head"><div><h3>Billing Management</h3><p>Hiển thị {number(revenueReport.rangeInvoices.length)} hóa đơn trong khoảng đã chọn.</p></div></div><div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Mã hóa đơn</th><th>Doanh nghiệp</th><th>Gói</th><th>Số tiền</th><th>Ngày thanh toán</th><th>Phương thức</th><th>Trạng thái</th></tr></thead><tbody>{revenueReport.rangeInvoices.map(item => <tr key={item.id}><td>{item.id}</td><td>{item.company}</td><td>{item.plan}</td><td>{money(Number(item.amount))}</td><td>{item.date}</td><td>{item.method}</td><td><StatusBadge value={String(item.status)} /></td></tr>)}</tbody></table></div></section>
+          <section className="admin-card"><div className="admin-card-head"><div><h3>Billing Management</h3><p>Hiển thị {number(revenueReport.rangeInvoices.length)} giao dịch thật trong khoảng đã chọn.</p></div></div><div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Mã giao dịch</th><th>Người dùng</th><th>Gói</th><th>Số tiền</th><th>Ngày thanh toán</th><th>Ngân hàng</th><th>Trạng thái</th></tr></thead><tbody>{revenueReport.rangeInvoices.length === 0 ? <tr><td colSpan={7} style={{ textAlign: 'center', padding: 24, color: 'var(--text-secondary)' }}>Chưa có giao dịch thanh toán thật trong khoảng này.</td></tr> : revenueReport.rangeInvoices.map(item => <tr key={item.id}><td>{item.txnRef}</td><td>{paymentCustomerName(item)}</td><td>{item.planId}</td><td>{money(Number(item.amount))}</td><td>{formatShortDate(paymentDate(item))}</td><td>{item.bankCode || '-'}</td><td><StatusBadge value={String(item.status)} /></td></tr>)}</tbody></table></div></section>
         </>
       )}
 
@@ -599,7 +710,7 @@ export default function AdminPage() {
           <section className="admin-card">
             <div className="admin-card-head"><div><h3>AI Management</h3><p>Giới hạn AI usage, bật/tắt AI, quản lý credits và lịch sử AI.</p></div><button className="admin-button admin-button-primary"><Settings size={16} /> Cấu hình AI</button></div>
             <div className="admin-ai-controls"><label><input type="checkbox" defaultChecked /> Bật AI toàn hệ thống</label><label><input type="checkbox" defaultChecked /> Giới hạn theo gói</label><label><input type="checkbox" /> Chặn khi vượt chi phí</label></div>
-            <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>User</th><th>Doanh nghiệp</th><th>Request</th><th>Token</th><th>Chi phí</th><th>Credits còn lại</th></tr></thead><tbody>{users.slice(0, 6).map((item, index) => <tr key={item.email}><td>{item.name}</td><td>{item.company}</td><td>{number(1200 + index * 387)}</td><td>{number(240000 + index * 8900)}</td><td>{money(420000 + index * 62000)}</td><td>{number(12000 - index * 850)}</td></tr>)}</tbody></table></div>
+            <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>User</th><th>Email</th><th>Gói AI</th><th>Hết hạn</th></tr></thead><tbody>{adminUsers.length === 0 ? <tr><td colSpan={4} style={{ textAlign: 'center', padding: 24, color: 'var(--text-secondary)' }}>Chưa có user trong hệ thống.</td></tr> : adminUsers.slice(0, 6).map(item => <tr key={item.id}><td>{item.fullName || item.username}</td><td>{item.email || '-'}</td><td>{item.aiPlan || 'free'}</td><td>{item.aiPlanExpiresAt ? formatShortDate(item.aiPlanExpiresAt) : '-'}</td></tr>)}</tbody></table></div>
           </section>
         </>
       )}
@@ -645,7 +756,7 @@ export default function AdminPage() {
           <section className="admin-card">
             <div className="admin-card-head"><div><h3>Báo cáo điều hành</h3><p>Doanh thu, tăng trưởng, doanh nghiệp mới, user mới, batch, hiệu suất xưởng, nhân viên và QC pass rate.</p></div><div className="admin-row-actions"><button><Download size={14} /> PDF</button><button><Download size={14} /> Excel</button><button><CalendarDays size={14} /> Chọn khoảng thời gian</button></div></div>
           </section>
-          <section className="admin-kpi-grid">{['Doanh thu 8.12B', 'Tăng trưởng 31.8%', 'DN mới 24', 'User mới 1,240', 'Batch 18,930', 'Hiệu suất xưởng 88%', 'Hiệu suất nhân viên 91%', 'QC pass rate 97.2%'].map(item => { const value = item.split(' ').at(-1) ?? item; return <article className="admin-kpi" key={item}><div className="admin-kpi-icon"><FileBarChart size={20} /></div><div><span>{item.replace(value, '')}</span><strong>{value}</strong><small>Executive KPI</small></div></article>; })}</section>
+          <section className="admin-kpi-grid">{kpis.slice(0, 8).map(item => <KpiCard key={`report-${item.label}`} item={{ ...item, icon: FileBarChart }} />)}</section>
         </>
       )}
     </div>

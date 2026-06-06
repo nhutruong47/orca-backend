@@ -52,6 +52,11 @@ public class AdminController {
         return ResponseEntity.ok(adminService.getTasks());
     }
 
+    @GetMapping("/payments")
+    public ResponseEntity<List<Map<String, Object>>> getPayments() {
+        return ResponseEntity.ok(adminService.getPayments());
+    }
+
     @PatchMapping("/users/{id}/role")
     public ResponseEntity<Map<String, Object>> updateUserRole(
             @PathVariable UUID id,

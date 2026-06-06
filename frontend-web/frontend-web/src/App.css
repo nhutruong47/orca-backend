@@ -2938,23 +2938,49 @@ body.theme-light .text-glow-active {
   border-radius: 8px;
   color: var(--shell-text-soft);
   font-weight: 700;
+  border: 1px solid transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.nav-item:not(.active) {
+  opacity: 0.76;
 }
 
 .nav-item:hover {
   background: var(--shell-surface-hover);
   color: var(--shell-title);
+  opacity: 1;
   transform: translateX(2px);
 }
 
 .nav-item.active {
-  background: linear-gradient(90deg, var(--shell-accent-soft), transparent);
-  color: var(--shell-accent);
-  box-shadow: inset 3px 0 0 var(--shell-accent-line), 0 12px 28px rgba(0, 0, 0, 0.12);
+  background:
+    linear-gradient(90deg, rgba(255, 172, 96, 0.32), rgba(255, 172, 96, 0.11)),
+    var(--shell-surface-hover);
+  border-color: rgba(255, 172, 96, 0.72);
+  color: #ffd7ad;
+  box-shadow:
+    inset 5px 0 0 #ffac60,
+    0 0 0 1px rgba(255, 172, 96, 0.12),
+    0 14px 34px rgba(255, 172, 96, 0.16);
+  opacity: 1;
   text-shadow: none;
+  transform: translateX(3px);
 }
 
 .nav-item.active::before {
-  display: none;
+  content: '';
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #ffac60;
+  box-shadow: 0 0 18px rgba(255, 172, 96, 0.9);
+  transform: translateY(-50%);
 }
 
 .nav-icon {

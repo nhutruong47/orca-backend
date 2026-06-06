@@ -44,6 +44,7 @@ export default function GroupDetailPage() {
     const [allTasks, setAllTasks] = useState<Task[]>([]);
     const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null);
     const [showAddMember, setShowAddMember] = useState(false);
+    const [inviteEmail, setInviteEmail] = useState('');
     const [showCreateGoal, setShowCreateGoal] = useState(false);
     const [goalTitle, setGoalTitle] = useState('');
     const [goalTarget, setGoalTarget] = useState('');
@@ -119,7 +120,10 @@ export default function GroupDetailPage() {
     const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
     const [dmPreviews, setDmPreviews] = useState<ChatMsg[]>([]);
 
-    const isAdmin = team?.members?.find(m => m.userId === user?.id)?.groupRole === 'ADMIN' || team?.ownerId === user?.id;
+    const currentMember = team?.members?.find(m => m.userId === user?.id);
+    const isSystemAdmin = user?.role === 'ADMIN';
+    const isAdmin = currentMember?.groupRole === 'ADMIN' || team?.ownerId === user?.id;
+    const isManager = !isSystemAdmin && isAdmin;
 
     useEffect(() => {
         if (!team || !user) return;
@@ -247,7 +251,26 @@ export default function GroupDetailPage() {
         loadChatMessages();
     };
 
-    const closeModal = () => { setShowAddMember(false); setError(''); setSuccessMsg(''); };
+    const closeModal = () => { setShowAddMember(false); setInviteEmail(''); setError(''); setSuccessMsg(''); };
+
+    const handleInviteMember = async () => {
+        if (!id || !inviteEmail.trim()) {
+            setError('Vui lòng nhập email người được mời.');
+            return;
+        }
+        try {
+            setError('');
+            setLoading(true);
+            const result = await teamService.addMember(id, inviteEmail.trim());
+            setSuccessMsg(result.message || 'Đã gửi lời mời.');
+            setInviteEmail('');
+            setTimeout(() => setSuccessMsg(''), 2500);
+        } catch (e: any) {
+            setError(e?.response?.data?.error || 'Không thể gửi lời mời.');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const toDatetimeInputValue = (value?: string) => {
         if (!value) return '';
@@ -498,10 +521,9 @@ export default function GroupDetailPage() {
 
     // Bar data
     const barData = memberStats.map(m => ({ name: (m.fullName || m.username).split(' ').pop(), tasks: m.total, completed: m.completed }));
-    const visibleMemberStats = memberStats.filter(m => {
-        const isManager = m.groupRole === 'ADMIN' || m.groupRole === 'OWNER' || m.userId === team.ownerId;
-        return isAdmin ? !isManager : m.userId === user?.id;
-    });
+    // Show the actual team roster for everyone. The previous filter hid all other
+    // members for non-admin users, which made the group appear to have only one member.
+    const visibleMemberStats = memberStats;
     const latestGoal = [...goals].sort((a, b) => {
         const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -541,6 +563,7 @@ export default function GroupDetailPage() {
             </div>
 
             {/* ===== STATS CARDS ===== */}
+            {isManager && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 18 }}>
                 {[
                     { label: 'Tổng công việc', value: totalTasks, icon: 'clipboard-outline', bg: '#f9f1e3', color: '#d4a574' },
@@ -559,9 +582,10 @@ export default function GroupDetailPage() {
                     </div>
                 ))}
             </div>
+            )}
 
             {/* ===== EMPTY STATE / ANALYTICS ===== */}
-            {totalTasks === 0 ? (
+            {isManager && (totalTasks === 0 ? (
                 <div style={{ background: 'var(--bg-card)', borderRadius: 16, padding: '28px 24px', border: '1px solid var(--border)', marginBottom: 18, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                         <div style={{ width: 48, height: 48, borderRadius: 14, background: 'rgba(212, 165, 116, 0.12)', color: 'var(--accent-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>
@@ -576,7 +600,7 @@ export default function GroupDetailPage() {
             ) : (
             <>
             {/* ===== LINE CHART ===== */}
-            {isAdmin && (
+            {isManager && (
                 <div style={{ background: '#fff', borderRadius: 14, padding: '20px 24px', border: '1px solid #e2e8f0', marginBottom: 18 }}>
                     <h3 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 700, color: '#1e293b' }}>Hiệu suất nhân viên trong tuần</h3>
                 <ResponsiveContainer width="100%" height={220}>
@@ -595,7 +619,7 @@ export default function GroupDetailPage() {
             )}
 
             {/* ===== TWO COL: DONUT + BAR ===== */}
-            <div style={{ display: 'grid', gridTemplateColumns: isAdmin ? 'repeat(auto-fit, minmax(320px, 1fr))' : '1fr', gap: 16, marginBottom: 18 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isManager ? 'repeat(auto-fit, minmax(320px, 1fr))' : '1fr', gap: 16, marginBottom: 18 }}>
                 {/* Donut */}
                 <div style={{ background: '#fff', borderRadius: 14, padding: '20px 24px', border: '1px solid #e2e8f0' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -622,7 +646,7 @@ export default function GroupDetailPage() {
                 </div>
 
                 {/* Bar */}
-                {isAdmin && (
+                {isManager && (
                 <div style={{ background: '#fff', borderRadius: 14, padding: '20px 24px', border: '1px solid #e2e8f0' }}>
                     <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700, color: '#1e293b' }}>So sánh thành viên</h3>
                     <ResponsiveContainer width="100%" height={140}>
@@ -639,7 +663,7 @@ export default function GroupDetailPage() {
                 )}
             </div>
             </>
-            )}
+            ))}
 
             {/* ===== MEMBER CARDS ===== */}
             {visibleMemberStats.length > 0 && (
@@ -1379,26 +1403,23 @@ export default function GroupDetailPage() {
                 <div className="modal-overlay" onClick={closeModal} style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}>
                     <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 480, padding: 0, borderRadius: 20, overflow: 'hidden', background: '#fff', border: 'none', color: '#1a1a1a', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
                         <div style={{ padding: '24px 32px', textAlign: 'center' }}>
-                            <h2 style={{ fontSize: 24, fontWeight: 800, color: '#111827', margin: '0 0 8px' }}>Mã mời nhóm</h2>
-                            <p style={{ fontSize: 13, color: '#6b7280', margin: 0 }}>Chia sẻ mã hoặc quét QR để mời thành viên.</p>
+                            <h2 style={{ fontSize: 24, fontWeight: 800, color: '#111827', margin: '0 0 8px' }}>Mời thành viên</h2>
+                            <p style={{ fontSize: 13, color: '#6b7280', margin: 0 }}>Gửi lời mời bằng email cho người bạn muốn thêm vào nhóm.</p>
                         </div>
                         <div style={{ padding: '0 32px 24px' }}>
-                            <div style={{ background: '#f8fafc', borderRadius: 16, padding: '24px', textAlign: 'center', border: '1px solid #e2e8f0', marginBottom: 20 }}>
-                                <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 16 }}>
-                                    {(team.inviteCode || 'ABCDEF').split('').map((c, i) => (
-                                        <div key={i} style={{ width: 44, height: 54, background: '#fff', borderRadius: 10, border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, fontWeight: 800, color: '#4f46e5' }}>{c}</div>
-                                    ))}
-                                </div>
-                                <button onClick={() => { navigator.clipboard.writeText(team.inviteCode || ''); setSuccessMsg('Đã copy!'); setTimeout(() => setSuccessMsg(''), 2000); }} style={{ background: '#fff', color: '#6b7280', border: '1px solid #e2e8f0', fontSize: 12, fontWeight: 600, padding: '8px 16px', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto' }}>
-                                    <ion-icon name="copy-outline"></ion-icon> Sao chép
-                                </button>
+                            {error && <div style={{ background: '#fef2f2', color: '#dc2626', padding: '8px 12px', borderRadius: 8, fontSize: 13, marginBottom: 12 }}>{error}</div>}
+                            <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 8 }}>Email người được mời</label>
+                            <input
+                                value={inviteEmail}
+                                onChange={e => setInviteEmail(e.target.value)}
+                                placeholder="name@example.com"
+                                style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid #e2e8f0', marginBottom: 12, fontSize: 14 }}
+                            />
+                            <p style={{ fontSize: 12, color: '#6b7280', margin: '0 0 12px' }}>Chỉ chủ nhóm hoặc quản trị viên mới có thể gửi lời mời.</p>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button onClick={closeModal} style={{ flex: 1, background: '#f8fafc', color: '#1f2937', border: '1px solid #e2e8f0', padding: '12px', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>Hủy</button>
+                                <button onClick={handleInviteMember} disabled={loading} style={{ flex: 1, background: loading ? '#e5e7eb' : '#d4a574', color: loading ? '#9ca3af' : '#fff', border: 'none', padding: '12px', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: loading ? 'not-allowed' : 'pointer' }}>{loading ? 'Đang gửi...' : 'Gửi lời mời'}</button>
                             </div>
-                            <div style={{ textAlign: 'center', marginBottom: 20 }}>
-                                <div style={{ width: 140, height: 140, margin: '0 auto 12px', padding: 10, background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0' }}>
-                                    <img src={`https://api.qrserver.com/v1/create-qr-code/?size=130x130&data=${encodeURIComponent(`${window.location.origin}/invite/${team.inviteCode}`)}`} alt="QR" style={{ width: '100%', height: '100%' }} />
-                                </div>
-                            </div>
-                            <button onClick={closeModal} style={{ width: '100%', background: '#f8fafc', color: '#1f2937', border: '1px solid #e2e8f0', padding: '12px', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>Hoàn tất</button>
                         </div>
                         {successMsg && <div style={{ position: 'absolute', bottom: 20, left: '50%', transform: 'translateX(-50%)', background: '#111827', color: '#fff', padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 600 }}><ion-icon name="checkmark-circle" style={{ color: '#10b981' }}></ion-icon> {successMsg}</div>}
                     </div>

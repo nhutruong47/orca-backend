@@ -158,19 +158,51 @@ public class GoalService {
                         "nhanSu",
                         "personnel");
                 boolean assigned = false;
+                User assignedUser = null;
                 if (aiAssignee != null && !aiAssignee.isEmpty()) {
                     Optional<User> matchedUser = findTeamUser(assignableMembers, aiAssignee.trim());
                     if (matchedUser.isPresent()) {
-                        task.setMember(matchedUser.get());
+                        assignedUser = matchedUser.get();
+                        task.setMember(assignedUser);
                         assigned = true;
                         System.out.println("✅ AI giao task '" + task.getTitle() + "' cho: " + aiAssignee);
                     }
                 }
                 if (!assigned && !memberNames.isEmpty()) {
                     String fallback = memberNames.get(memberIndex % memberNames.size());
-                    userRepo.findByUsername(fallback).ifPresent(task::setMember);
+                    assignedUser = userRepo.findByUsername(fallback).orElse(null);
+                    if (assignedUser != null) {
+                        task.setMember(assignedUser);
+                    }
                     memberIndex++;
                     System.out.println("⚠️ Fallback round-robin giao task '" + task.getTitle() + "' cho: " + fallback);
+                }
+
+                String aiBackupAssignee = firstText(tp,
+                        "backupMember",
+                        "backupAssignee",
+                        "backupWorker",
+                        "replacement",
+                        "substitute",
+                        "secondaryAssignee",
+                        "backupPerson");
+                if (aiBackupAssignee != null && !aiBackupAssignee.isEmpty()) {
+                    Optional<User> matchedBackup = findTeamUser(assignableMembers, aiBackupAssignee.trim());
+                    if (matchedBackup.isPresent() && !matchedBackup.get().getId().equals(assignedUser != null ? assignedUser.getId() : null)) {
+                        task.setBackupMember(matchedBackup.get());
+                        System.out.println("✅ AI gán người thay cho task '" + task.getTitle() + "': " + aiBackupAssignee);
+                    }
+                } else if (assignedUser != null && !memberNames.isEmpty()) {
+                    final User currentAssignee = assignedUser;
+                    List<User> candidateBackups = assignableMembers.stream()
+                            .map(TeamMember::getUser)
+                            .filter(user -> !user.getId().equals(currentAssignee.getId()))
+                            .collect(Collectors.toList());
+                    if (!candidateBackups.isEmpty()) {
+                        User backupUser = candidateBackups.get(memberIndex % candidateBackups.size());
+                        task.setBackupMember(backupUser);
+                        System.out.println("✅ AI gán người thay fallback cho task '" + task.getTitle() + "': " + backupUser.getUsername());
+                    }
                 }
 
                 taskRepo.save(task);

@@ -8,7 +8,21 @@ export default function Sidebar() {
     const location = useLocation();
     const [userMenuOpen, setUserMenuOpen] = useState(false);
 
-    const navItems = [
+    const adminNavItems = [
+        { path: '/admin?section=overview', label: 'Dashboard', icon: 'speedometer-outline' },
+        { path: '/admin?section=businesses', label: 'Doanh nghiệp / Xưởng', icon: 'business-outline' },
+        { path: '/admin?section=users', label: 'User toàn hệ thống', icon: 'people-outline' },
+        { path: '/admin?section=subscriptions', label: 'Gói dịch vụ', icon: 'receipt-outline' },
+        { path: '/admin?section=billing', label: 'Thanh toán', icon: 'card-outline' },
+        { path: '/admin?section=ai', label: 'AI Management', icon: 'hardware-chip-outline' },
+        { path: '/admin?section=monitoring', label: 'System Monitoring', icon: 'pulse-outline' },
+        { path: '/admin?section=audit', label: 'Audit Log', icon: 'shield-checkmark-outline' },
+        { path: '/admin?section=workflow', label: 'Workflow', icon: 'git-network-outline' },
+        { path: '/admin?section=alerts', label: 'Alert Center', icon: 'notifications-outline' },
+        { path: '/admin?section=reports', label: 'Executive Report', icon: 'document-text-outline' },
+    ];
+
+    const navItems = user?.role === 'ADMIN' ? adminNavItems : [
         { path: '/dashboard', label: 'Dashboard', icon: 'grid-outline' },
         { path: '/groups', label: 'Nhóm xưởng', icon: 'people-outline' },
         { path: '/marketplace', label: 'Thị trường', icon: 'storefront-outline' },
@@ -17,11 +31,15 @@ export default function Sidebar() {
 
     const userMenuItems = [
         { path: '/upgrade', label: 'Nâng cấp AI', icon: 'sparkles-outline' },
-        ...(user?.role === 'ADMIN' ? [{ path: '/admin', label: 'Admin', icon: 'shield-checkmark-outline' }] : []),
         { path: '/profile', label: 'Hồ sơ', icon: 'person-circle-outline' },
         { path: '/settings', label: 'Cài đặt', icon: 'settings-outline' },
     ];
     const isNavActive = (path: string) => {
+        if (path.startsWith('/admin')) {
+            const section = new URLSearchParams(path.split('?')[1] || '').get('section') || 'overview';
+            const currentSection = new URLSearchParams(location.search).get('section') || 'overview';
+            return location.pathname === '/admin' && section === currentSection;
+        }
         if (path === '/marketplace') {
             return location.pathname.startsWith('/marketplace')
                 || location.pathname === '/dat-hang'
@@ -40,13 +58,15 @@ export default function Sidebar() {
 
             <nav className="sidebar-nav">
                 <div className="nav-label">MENU</div>
-                {navItems.map((item) => (
-                    <NavLink key={item.path} to={item.path}
-                        className={`nav-item ${isNavActive(item.path) ? 'active' : ''}`}>
-                        <span className="nav-icon"><ion-icon name={item.icon} style={{ fontSize: '18px' }}></ion-icon></span>
-                        <span className="nav-text">{item.label}</span>
-                    </NavLink>
-                ))}
+                {navItems.map((item) => {
+                    const active = isNavActive(item.path);
+                    return (
+                        <NavLink key={item.path} to={item.path} className={() => `nav-item ${active ? 'active' : ''}`}>
+                            <span className="nav-icon"><ion-icon name={item.icon} style={{ fontSize: '18px' }}></ion-icon></span>
+                            <span className="nav-text">{item.label}</span>
+                        </NavLink>
+                    );
+                })}
             </nav>
 
             {user && (
