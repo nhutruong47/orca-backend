@@ -1,0 +1,56 @@
+HELP.md
+target/
+.mvn/wrapper/maven-wrapper.jar
+**/.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### Monorepo local artifacts ###
+.legacy/
+.push/
+node_modules/
+dist/
+.dev_pid
+.env
+.env.*
+data/*.trace.db
+data/*.mv.db
+coverage/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### Runtime / diagnostic output ###
+*.log
+*.err
+compile*.txt
+maven*_output.txt
+run_log*.txt
+db_diagnostic*.txt
+server_debug_log.txt
+server_log.txt
+
+### VS Code ###
+.vscode/

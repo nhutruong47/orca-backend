@@ -1,0 +1,13 @@
+.git
+.legacy
+.push
+.runtime
+data
+frontend/node_modules
+frontend/dist
+backend/target
+*.log
+*.err
+*.local
+.env
+.env.*
