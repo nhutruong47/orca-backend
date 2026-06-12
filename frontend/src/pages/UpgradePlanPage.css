@@ -83,6 +83,67 @@
     font-weight: 800;
 }
 
+.payment-methods {
+    width: min(620px, 100%);
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.payment-methods button {
+    min-height: 74px;
+    display: grid;
+    grid-template-columns: 22px 1fr;
+    gap: 3px 10px;
+    align-items: center;
+    padding: 14px 16px;
+    color: #343541;
+    background: #fff;
+    border: 1px solid #dedede;
+    border-radius: 8px;
+    text-align: left;
+    font: inherit;
+    cursor: pointer;
+}
+
+.payment-methods button.active {
+    border-color: #202123;
+    box-shadow: 0 0 0 1px #202123;
+}
+
+.payment-methods button.momo.active {
+    border-color: #d6008f;
+    box-shadow: 0 0 0 1px #d6008f;
+}
+
+.payment-methods button.vnpay.active {
+    border-color: #1459c8;
+    box-shadow: 0 0 0 1px #1459c8;
+}
+
+.payment-methods svg {
+    grid-row: span 2;
+}
+
+.payment-methods .momo svg {
+    color: #d6008f;
+}
+
+.payment-methods .vnpay svg {
+    color: #1459c8;
+}
+
+.payment-methods span {
+    font-size: 14px;
+    font-weight: 800;
+}
+
+.payment-methods small {
+    color: #6f6f6f;
+    font-size: 12px;
+}
+
 .upgrade-grid {
     width: min(1180px, 100%);
     margin: 0 auto;
@@ -330,5 +391,9 @@
     .upgrade-billing-toggle button {
         flex: 1;
         padding-inline: 10px;
+    }
+
+    .payment-methods {
+        grid-template-columns: 1fr;
     }
 }

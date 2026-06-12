@@ -129,7 +129,7 @@ public class GoalService {
                 task.setPriority(parsePriority(tp.get("priority")));
                 
                 task.setDeadline(parsedDeadline);
-                task.setOutputTarget(totalGoalTarget > 0 && totalTaskCount > 0 ? totalGoalTarget / totalTaskCount : 0.0);
+                task.setOutputTarget(totalGoalTarget > 0 ? totalGoalTarget : 0.0);
                 task.setActualOutput(0.0);
                 task.setStatus("READY");
 

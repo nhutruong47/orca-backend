@@ -44,7 +44,46 @@ public class PaymentController {
     public ResponseEntity<Map<String, Object>> createMockTransfer(
             @AuthenticationPrincipal User user,
             @RequestBody Map<String, String> body) {
-        return ResponseEntity.ok(vnpayPaymentService.createMockTransfer(user, body.get("planId")));
+        return ResponseEntity.ok(vnpayPaymentService.createMockTransfer(
+                user,
+                body.get("planId"),
+                body.get("method")
+        ));
+    }
+
+    @PostMapping("/virtual-qr/create")
+    public ResponseEntity<Map<String, Object>> createVirtualQrPayment(
+            @AuthenticationPrincipal User user,
+            @RequestBody Map<String, String> body) {
+        return ResponseEntity.ok(vnpayPaymentService.createVirtualQrPayment(
+                user,
+                body.get("planId"),
+                body.get("method")
+        ));
+    }
+
+    @PostMapping("/virtual-qr/confirm")
+    public ResponseEntity<Map<String, Object>> confirmVirtualQrPayment(
+            @AuthenticationPrincipal User user,
+            @RequestBody Map<String, String> body) {
+        return ResponseEntity.ok(vnpayPaymentService.confirmVirtualQrPayment(user, body.get("txnRef")));
+    }
+
+    @GetMapping("/momo/return")
+    public ResponseEntity<Void> handleMomoReturn(@RequestParam Map<String, String> params) {
+        Map<String, Object> result = vnpayPaymentService.handleMomoReturn(params);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setLocation(URI.create(vnpayPaymentService.buildFrontendRedirect(result)));
+        return new ResponseEntity<>(headers, HttpStatus.FOUND);
+    }
+
+    @PostMapping("/momo/ipn")
+    public ResponseEntity<Map<String, Object>> handleMomoIpn(@RequestBody Map<String, Object> body) {
+        Map<String, Object> result = vnpayPaymentService.handleMomoIpn(body);
+        return ResponseEntity.ok(Map.of(
+                "resultCode", "SUCCESS".equals(result.get("status")) ? 0 : 1,
+                "message", result.getOrDefault("message", "Unknown error")
+        ));
     }
 
     @GetMapping("/vnpay/return")

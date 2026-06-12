@@ -13,7 +13,11 @@ public class TaskDTO {
     private Double workload;
     private Double actualWorkload;
     private Integer completionPercentage;
+    private Double outputTarget;
+    private Double actualOutput;
     private LocalDateTime deadline;
+    private String productionStage;
+    private LocalDateTime dueTime;
     private String goalId;
     private String goalTitle;
     private String memberId;
@@ -87,6 +91,22 @@ public class TaskDTO {
         this.completionPercentage = completionPercentage;
     }
 
+    public Double getOutputTarget() {
+        return outputTarget;
+    }
+
+    public void setOutputTarget(Double outputTarget) {
+        this.outputTarget = outputTarget;
+    }
+
+    public Double getActualOutput() {
+        return actualOutput;
+    }
+
+    public void setActualOutput(Double actualOutput) {
+        this.actualOutput = actualOutput;
+    }
+
     public LocalDateTime getDeadline() {
         return deadline;
     }
@@ -94,6 +114,12 @@ public class TaskDTO {
     public void setDeadline(LocalDateTime deadline) {
         this.deadline = deadline;
     }
+
+    public String getProductionStage() { return productionStage; }
+    public void setProductionStage(String productionStage) { this.productionStage = productionStage; }
+
+    public LocalDateTime getDueTime() { return dueTime; }
+    public void setDueTime(LocalDateTime dueTime) { this.dueTime = dueTime; }
 
     public String getGoalId() {
         return goalId;

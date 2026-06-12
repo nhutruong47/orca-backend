@@ -6,8 +6,14 @@ import org.example.backend.entity.User;
 import org.example.backend.repository.PaymentTransactionRepository;
 import org.example.backend.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import javax.crypto.Mac;
@@ -17,6 +23,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -29,12 +36,13 @@ public class VnpayPaymentService {
     private static final ZoneId VIETNAM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private static final DateTimeFormatter VNPAY_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
     private static final List<Plan> PLANS = List.of(
-            new Plan("plus", "AI Plus", 129000, 500000),
-            new Plan("pro", "AI Pro", 249000, 1500000)
+            new Plan("professional", "Professional", 129000, 500000),
+            new Plan("enterprise", "Enterprise", 249000, 1500000)
     );
 
     private final PaymentTransactionRepository paymentRepository;
     private final UserRepository userRepository;
+    private final RestTemplate restTemplate = new RestTemplate();
 
     @Value("${vnpay.pay-url:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}")
     private String payUrl;
@@ -50,6 +58,27 @@ public class VnpayPaymentService {
 
     @Value("${app.frontend.url:http://localhost:5173}")
     private String frontendUrl;
+
+    @Value("${momo.create-url:https://test-payment.momo.vn/v2/gateway/api/create}")
+    private String momoCreateUrl;
+
+    @Value("${momo.partner-code:}")
+    private String momoPartnerCode;
+
+    @Value("${momo.access-key:}")
+    private String momoAccessKey;
+
+    @Value("${momo.secret-key:}")
+    private String momoSecretKey;
+
+    @Value("${momo.redirect-url:http://localhost:8080/api/payments/momo/return}")
+    private String momoRedirectUrl;
+
+    @Value("${momo.ipn-url:http://localhost:8080/api/payments/momo/ipn}")
+    private String momoIpnUrl;
+
+    @Value("${momo.allow-manual-confirm:false}")
+    private boolean momoAllowManualConfirm;
 
     public VnpayPaymentService(PaymentTransactionRepository paymentRepository, UserRepository userRepository) {
         this.paymentRepository = paymentRepository;
@@ -67,6 +96,7 @@ public class VnpayPaymentService {
         transaction.setPlanId(plan.id());
         transaction.setAmount(plan.monthlyPrice());
         transaction.setBankCode(bankCode);
+        transaction.setPaymentMethod("VNPAY");
         paymentRepository.save(transaction);
 
         LocalDateTime now = LocalDateTime.now(VIETNAM_ZONE);
@@ -105,9 +135,10 @@ public class VnpayPaymentService {
     }
 
     @Transactional
-    public Map<String, Object> createMockTransfer(User user, String planId) {
+    public Map<String, Object> createMockTransfer(User user, String planId, String method) {
         Plan plan = findPlan(planId);
-        String txnRef = "MOCK" + System.currentTimeMillis();
+        String paymentMethod = normalizePaymentMethod(method);
+        String txnRef = paymentMethod + System.currentTimeMillis();
 
         PaymentTransaction transaction = new PaymentTransaction();
         transaction.setTxnRef(txnRef);
@@ -117,18 +148,198 @@ public class VnpayPaymentService {
         transaction.setStatus("PAID");
         transaction.setVnpResponseCode("00");
         transaction.setVnpTransactionStatus("00");
-        transaction.setVnpTransactionNo("MOCK-" + txnRef);
-        transaction.setBankCode("VIRTUAL");
+        transaction.setVnpTransactionNo(paymentMethod + "-" + txnRef);
+        transaction.setBankCode(paymentMethod + "_QR");
+        transaction.setPaymentMethod(paymentMethod);
+        transaction.setQrPayload(buildVirtualQrPayload(paymentMethod, txnRef, plan));
         transaction.setPaidAt(LocalDateTime.now());
         paymentRepository.save(transaction);
 
-        user.setAiPlan(plan.id());
-        user.setAiPlanExpiresAt(LocalDateTime.now().plusMonths(1));
-        userRepository.save(user);
+        activatePlan(user, plan.id());
 
-        Map<String, Object> response = result(txnRef, plan.id(), "SUCCESS", "Chuyen khoan ao thanh cong", null);
+        Map<String, Object> response = result(txnRef, plan.id(), "SUCCESS", paymentMethodLabel(paymentMethod) + " QR ao thanh cong", null);
         response.put("planName", plan.name());
         response.put("amount", plan.monthlyPrice());
+        response.put("paymentMethod", paymentMethod);
+        return response;
+    }
+
+    @Transactional
+    public Map<String, Object> createVirtualQrPayment(User user, String planId, String method) {
+        Plan plan = findPlan(planId);
+        String paymentMethod = normalizePaymentMethod(method);
+        if ("MOMO".equals(paymentMethod)) {
+            if (!isMomoConfigured() && momoAllowManualConfirm) {
+                return createLocalVirtualQrPayment(user, plan, paymentMethod);
+            }
+            return createMomoQrPayment(user, plan);
+        }
+
+        return createLocalVirtualQrPayment(user, plan, paymentMethod);
+    }
+
+    private Map<String, Object> createLocalVirtualQrPayment(User user, Plan plan, String paymentMethod) {
+        String txnRef = paymentMethod + System.currentTimeMillis();
+        String qrPayload = buildVirtualQrPayload(paymentMethod, txnRef, plan);
+
+        PaymentTransaction transaction = new PaymentTransaction();
+        transaction.setTxnRef(txnRef);
+        transaction.setUser(user);
+        transaction.setPlanId(plan.id());
+        transaction.setAmount(plan.monthlyPrice());
+        transaction.setStatus("PENDING");
+        transaction.setBankCode(paymentMethod + "_QR");
+        transaction.setPaymentMethod(paymentMethod);
+        transaction.setQrPayload(qrPayload);
+        paymentRepository.save(transaction);
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("txnRef", txnRef);
+        response.put("planId", plan.id());
+        response.put("planName", plan.name());
+        response.put("amount", plan.monthlyPrice());
+        response.put("paymentMethod", paymentMethod);
+        response.put("paymentMethodName", paymentMethodLabel(paymentMethod));
+        response.put("qrPayload", qrPayload);
+        response.put("status", "PENDING");
+        response.put("message", "Quet ma QR ao de thanh toan");
+        response.put("expiresAt", LocalDateTime.now(VIETNAM_ZONE).plusMinutes(15).toString());
+        return response;
+    }
+
+    private Map<String, Object> createMomoQrPayment(User user, Plan plan) {
+        ensureMomoConfigured();
+
+        String txnRef = "ORCAMOMO" + System.currentTimeMillis();
+        String requestId = txnRef;
+        String requestType = "captureWallet";
+        String extraData = "";
+        String orderInfo = "Thanh toan goi " + plan.name() + " cho ORCA";
+        String rawSignature = "accessKey=" + momoAccessKey
+                + "&amount=" + plan.monthlyPrice()
+                + "&extraData=" + extraData
+                + "&ipnUrl=" + momoIpnUrl
+                + "&orderId=" + txnRef
+                + "&orderInfo=" + orderInfo
+                + "&partnerCode=" + momoPartnerCode
+                + "&redirectUrl=" + momoRedirectUrl
+                + "&requestId=" + requestId
+                + "&requestType=" + requestType;
+
+        Map<String, Object> requestBody = new LinkedHashMap<>();
+        requestBody.put("partnerCode", momoPartnerCode);
+        requestBody.put("accessKey", momoAccessKey);
+        requestBody.put("requestType", requestType);
+        requestBody.put("ipnUrl", momoIpnUrl);
+        requestBody.put("redirectUrl", momoRedirectUrl);
+        requestBody.put("orderId", txnRef);
+        requestBody.put("amount", String.valueOf(plan.monthlyPrice()));
+        requestBody.put("orderInfo", orderInfo);
+        requestBody.put("requestId", requestId);
+        requestBody.put("extraData", extraData);
+        requestBody.put("signature", hmacSha256(momoSecretKey, rawSignature));
+        requestBody.put("lang", "vi");
+
+        Map<String, Object> momoResponse = callMomoCreate(requestBody);
+        int resultCode = parseInt(momoResponse.get("resultCode"));
+        String message = safeString(momoResponse.get("message"));
+        String qrCodeUrl = safeString(momoResponse.get("qrCodeUrl"));
+
+        if (resultCode != 0 || qrCodeUrl.isBlank()) {
+            throw new RuntimeException("MoMo sandbox khong tao duoc QR: " + (message.isBlank() ? "resultCode=" + resultCode : message));
+        }
+
+        PaymentTransaction transaction = new PaymentTransaction();
+        transaction.setTxnRef(txnRef);
+        transaction.setUser(user);
+        transaction.setPlanId(plan.id());
+        transaction.setAmount(plan.monthlyPrice());
+        transaction.setStatus("PENDING");
+        transaction.setBankCode("MOMO_QR");
+        transaction.setPaymentMethod("MOMO");
+        transaction.setQrPayload(qrCodeUrl);
+        transaction.setVnpResponseCode(String.valueOf(resultCode));
+        transaction.setVnpTransactionStatus("PENDING");
+        paymentRepository.save(transaction);
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("txnRef", txnRef);
+        response.put("planId", plan.id());
+        response.put("planName", plan.name());
+        response.put("amount", plan.monthlyPrice());
+        response.put("paymentMethod", "MOMO");
+        response.put("paymentMethodName", "MoMo");
+        response.put("qrPayload", qrCodeUrl);
+        response.put("qrCodeUrl", qrCodeUrl);
+        response.put("deeplink", safeString(momoResponse.get("deeplink")));
+        response.put("payUrl", safeString(momoResponse.get("payUrl")));
+        response.put("status", "PENDING");
+        response.put("message", message.isBlank() ? "Quet ma QR bang MoMo Test" : message);
+        response.put("expiresAt", LocalDateTime.now(VIETNAM_ZONE).plusMinutes(15).toString());
+        return response;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> callMomoCreate(Map<String, Object> requestBody) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        try {
+            ResponseEntity<Map> response = restTemplate.postForEntity(
+                    momoCreateUrl,
+                    new HttpEntity<>(requestBody, headers),
+                    Map.class
+            );
+            Map<String, Object> body = response.getBody();
+            if (body == null) {
+                throw new RuntimeException("MoMo sandbox tra ve response rong");
+            }
+            return body;
+        } catch (RestClientException ex) {
+            throw new RuntimeException("Khong goi duoc MoMo sandbox: " + ex.getMessage(), ex);
+        }
+    }
+
+    @Transactional
+    public Map<String, Object> confirmVirtualQrPayment(User user, String txnRef) {
+        if (txnRef == null || txnRef.isBlank()) {
+            throw new RuntimeException("Ma giao dich khong hop le");
+        }
+
+        PaymentTransaction transaction = paymentRepository.findByTxnRef(txnRef)
+                .orElseThrow(() -> new RuntimeException("Khong tim thay giao dich"));
+
+        if (transaction.getUser() == null || !transaction.getUser().getId().equals(user.getId())) {
+            throw new RuntimeException("Ban khong co quyen xac nhan giao dich nay");
+        }
+
+        String paymentMethod = normalizePaymentMethod(transaction.getPaymentMethod());
+        if ("MOMO".equals(paymentMethod) && !momoAllowManualConfirm) {
+            throw new RuntimeException("Giao dich MoMo can duoc xac nhan qua IPN/return cua MoMo");
+        }
+
+        if ("PAID".equalsIgnoreCase(transaction.getStatus())) {
+            Map<String, Object> alreadyPaid = result(txnRef, transaction.getPlanId(), "SUCCESS", "Giao dich da duoc thanh toan", null);
+            alreadyPaid.put("planName", findPlan(transaction.getPlanId()).name());
+            alreadyPaid.put("amount", transaction.getAmount());
+            alreadyPaid.put("paymentMethod", paymentMethod);
+            return alreadyPaid;
+        }
+
+        transaction.setStatus("PAID");
+        transaction.setVnpResponseCode("00");
+        transaction.setVnpTransactionStatus("00");
+        transaction.setVnpTransactionNo(paymentMethod + "-" + txnRef);
+        transaction.setBankCode(paymentMethod + "_QR");
+        transaction.setPaymentMethod(paymentMethod);
+        transaction.setPaidAt(LocalDateTime.now());
+        paymentRepository.save(transaction);
+
+        activatePlan(user, transaction.getPlanId());
+
+        Map<String, Object> response = result(txnRef, transaction.getPlanId(), "SUCCESS", paymentMethodLabel(paymentMethod) + " QR ao thanh cong", null);
+        response.put("planName", findPlan(transaction.getPlanId()).name());
+        response.put("amount", transaction.getAmount());
+        response.put("paymentMethod", paymentMethod);
         return response;
     }
 
@@ -140,6 +351,16 @@ public class VnpayPaymentService {
     @Transactional
     public Map<String, Object> handleIpn(Map<String, String> params) {
         return processVnpayResult(params, true);
+    }
+
+    @Transactional
+    public Map<String, Object> handleMomoReturn(Map<String, String> params) {
+        return processMomoResult(new HashMap<>(params));
+    }
+
+    @Transactional
+    public Map<String, Object> handleMomoIpn(Map<String, Object> body) {
+        return processMomoResult(body);
     }
 
     public String buildFrontendRedirect(Map<String, Object> result) {
@@ -182,10 +403,7 @@ public class VnpayPaymentService {
         if (paid) {
             transaction.setStatus("PAID");
             transaction.setPaidAt(LocalDateTime.now());
-            User user = transaction.getUser();
-            user.setAiPlan(transaction.getPlanId());
-            user.setAiPlanExpiresAt(LocalDateTime.now().plusMonths(1));
-            userRepository.save(user);
+            activatePlan(transaction.getUser(), transaction.getPlanId());
         } else {
             transaction.setStatus("FAILED");
         }
@@ -219,6 +437,68 @@ public class VnpayPaymentService {
         String hashData = buildQuery(signedParams, true);
         String expectedHash = hmacSha512(hashSecret, hashData);
         return expectedHash.equalsIgnoreCase(receivedHash);
+    }
+
+    private Map<String, Object> processMomoResult(Map<String, ?> params) {
+        String txnRef = safeString(params.get("orderId"));
+        PaymentTransaction transaction = paymentRepository.findByTxnRef(txnRef)
+                .orElse(null);
+
+        if (!verifyMomoSignature(params)) {
+            return result(txnRef, null, "INVALID_SIGNATURE", "Chu ky MoMo khong hop le", null);
+        }
+        if (transaction == null) {
+            return result(txnRef, null, "NOT_FOUND", "Khong tim thay giao dich", null);
+        }
+        if (parseLong(safeString(params.get("amount"))) != transaction.getAmount()) {
+            return result(txnRef, transaction.getPlanId(), "INVALID_AMOUNT", "So tien khong khop", null);
+        }
+
+        int resultCode = parseInt(params.get("resultCode"));
+        boolean paid = resultCode == 0;
+        transaction.setVnpResponseCode(String.valueOf(resultCode));
+        transaction.setVnpTransactionStatus(paid ? "00" : String.valueOf(resultCode));
+        transaction.setVnpTransactionNo(safeString(params.get("transId")));
+        transaction.setBankCode(safeString(params.get("payType")).isBlank() ? "MOMO_QR" : safeString(params.get("payType")));
+        transaction.setPaymentMethod("MOMO");
+
+        if (paid) {
+            transaction.setStatus("PAID");
+            transaction.setPaidAt(LocalDateTime.now());
+            activatePlan(transaction.getUser(), transaction.getPlanId());
+        } else {
+            transaction.setStatus("FAILED");
+        }
+        paymentRepository.save(transaction);
+
+        return result(
+                txnRef,
+                transaction.getPlanId(),
+                paid ? "SUCCESS" : "FAILED",
+                paid ? "Thanh toan MoMo thanh cong" : safeString(params.get("message")),
+                null
+        );
+    }
+
+    private boolean verifyMomoSignature(Map<String, ?> params) {
+        String receivedSignature = safeString(params.get("signature"));
+        if (receivedSignature.isBlank()) {
+            return false;
+        }
+        String rawSignature = "accessKey=" + momoAccessKey
+                + "&amount=" + safeString(params.get("amount"))
+                + "&extraData=" + safeString(params.get("extraData"))
+                + "&message=" + safeString(params.get("message"))
+                + "&orderId=" + safeString(params.get("orderId"))
+                + "&orderInfo=" + safeString(params.get("orderInfo"))
+                + "&orderType=" + safeString(params.get("orderType"))
+                + "&partnerCode=" + safeString(params.get("partnerCode"))
+                + "&payType=" + safeString(params.get("payType"))
+                + "&requestId=" + safeString(params.get("requestId"))
+                + "&responseTime=" + safeString(params.get("responseTime"))
+                + "&resultCode=" + safeString(params.get("resultCode"))
+                + "&transId=" + safeString(params.get("transId"));
+        return hmacSha256(momoSecretKey, rawSignature).equalsIgnoreCase(receivedSignature);
     }
 
     private String buildQuery(Map<String, String> params, boolean encode) {
@@ -266,6 +546,65 @@ public class VnpayPaymentService {
                 .orElseThrow(() -> new RuntimeException("Goi AI khong hop le"));
     }
 
+    private String hmacSha256(String key, String data) {
+        if (key == null || key.isBlank()) {
+            throw new IllegalStateException("Missing MoMo secret key");
+        }
+        try {
+            Mac hmac = Mac.getInstance("HmacSHA256");
+            hmac.init(new SecretKeySpec(key.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            byte[] bytes = hmac.doFinal(data.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hash = new StringBuilder();
+            for (byte item : bytes) {
+                hash.append(String.format("%02x", item));
+            }
+            return hash.toString();
+        } catch (Exception ex) {
+            throw new IllegalStateException("Cannot sign MoMo request", ex);
+        }
+    }
+
+    private void ensureMomoConfigured() {
+        if (!isMomoConfigured()) {
+            throw new IllegalStateException("Missing MoMo sandbox config. Set MOMO_PARTNER_CODE, MOMO_ACCESS_KEY, MOMO_SECRET_KEY.");
+        }
+    }
+
+    private boolean isMomoConfigured() {
+        return momoPartnerCode != null && !momoPartnerCode.isBlank()
+                && momoAccessKey != null && !momoAccessKey.isBlank()
+                && momoSecretKey != null && !momoSecretKey.isBlank();
+    }
+
+    private String normalizePaymentMethod(String method) {
+        String normalized = method == null ? "VNPAY" : method.trim().toUpperCase(Locale.ROOT);
+        if (!List.of("MOMO", "VNPAY").contains(normalized)) {
+            throw new RuntimeException("Phuong thuc thanh toan khong hop le");
+        }
+        return normalized;
+    }
+
+    private String paymentMethodLabel(String method) {
+        return "MOMO".equalsIgnoreCase(method) ? "MoMo" : "VNPay";
+    }
+
+    private String buildVirtualQrPayload(String method, String txnRef, Plan plan) {
+        return String.join("|",
+                "ORCA",
+                normalizePaymentMethod(method),
+                txnRef,
+                plan.id(),
+                plan.name(),
+                String.valueOf(plan.monthlyPrice()),
+                "Thanh toan goi " + plan.name());
+    }
+
+    private void activatePlan(User user, String planId) {
+        user.setAiPlan(planId);
+        user.setAiPlanExpiresAt(LocalDateTime.now().plusMonths(1));
+        userRepository.save(user);
+    }
+
     private String clientIp(HttpServletRequest request) {
         String forwardedFor = request.getHeader("X-Forwarded-For");
         if (forwardedFor != null && !forwardedFor.isBlank()) {
@@ -280,6 +619,18 @@ public class VnpayPaymentService {
         } catch (Exception ex) {
             return 0;
         }
+    }
+
+    private int parseInt(Object value) {
+        try {
+            return Integer.parseInt(safeString(value));
+        } catch (Exception ex) {
+            return -1;
+        }
+    }
+
+    private String safeString(Object value) {
+        return value == null ? "" : String.valueOf(value);
     }
 
     private Map<String, Object> result(String txnRef, String planId, String status, String message, String rspCode) {

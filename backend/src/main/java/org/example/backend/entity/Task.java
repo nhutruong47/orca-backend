@@ -59,6 +59,12 @@ public class Task {
 
     private LocalDateTime deadline;
 
+    @Column(name = "production_stage")
+    private String productionStage;
+
+    @Column(name = "due_time")
+    private LocalDateTime dueTime;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -184,4 +190,10 @@ public class Task {
 
     public Double getHourlyRate() { return hourlyRate; }
     public void setHourlyRate(Double hourlyRate) { this.hourlyRate = hourlyRate; }
+
+    public String getProductionStage() { return productionStage; }
+    public void setProductionStage(String productionStage) { this.productionStage = productionStage; }
+
+    public LocalDateTime getDueTime() { return dueTime; }
+    public void setDueTime(LocalDateTime dueTime) { this.dueTime = dueTime; }
 }

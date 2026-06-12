@@ -4,10 +4,13 @@ import {
     ChevronRight,
     Gem,
     MessagesSquare,
+    QrCode,
     Sparkles,
+    Smartphone,
     Zap,
     type LucideIcon,
 } from 'lucide-react';
+import type { PaymentMethod } from '../services/paymentService';
 import './UpgradePlanPage.css';
 
 interface Plan {
@@ -29,49 +32,53 @@ interface Plan {
 const plans: Plan[] = [
     {
         id: 'starter',
-        name: 'Free Chat',
+        name: 'Starter',
         eyebrow: 'Gói hiện tại',
         price: '0đ',
         priceNote: 'tháng',
-        tokenLimit: '50K token',
-        model: 'ORCA Lite',
+        tokenLimit: 'Xưởng nhỏ',
+        model: 'AI quản lý công việc',
         current: true,
-        description: 'Dùng thử AI để tạo mục tiêu, chia task và hỏi nhanh trong nhóm.',
-        features: ['Chat AI cơ bản', 'Lưu lịch sử hội thoại gần đây', 'Tạo task từ mô tả ngắn', 'Hỗ trợ nhóm nhỏ'],
+        description: 'Dành cho xưởng nhỏ bắt đầu quản lý công việc bằng AI.',
+        features: ['AI tạo task từ đơn hàng', 'AI giao việc cho nhân viên', 'Theo dõi tiến độ sản xuất', 'Quản lý đơn hàng và batch', 'Báo cáo vận hành cơ bản'],
         icon: MessagesSquare,
         accent: 'coffee',
     },
     {
-        id: 'plus',
-        name: 'AI Plus',
-        eyebrow: 'Phù hợp cá nhân',
+        id: 'professional',
+        name: 'Professional',
+        eyebrow: 'Phổ biến nhất',
         price: '129.000đ',
         priceNote: 'tháng',
-        tokenLimit: '500K token',
-        model: 'ORCA Smart',
+        tokenLimit: 'Xưởng tăng trưởng',
+        model: 'AI điều phối sản xuất',
         featured: true,
-        description: 'Nhiều token hơn cho chat dài, phân tích task kỹ hơn và phản hồi nhanh.',
-        features: ['Ưu tiên tốc độ phản hồi', 'Chat dài nhiều ngữ cảnh', 'Tạo kế hoạch công việc chi tiết', 'Gợi ý deadline và ưu tiên'],
+        description: 'Dành cho xưởng đang tăng trưởng cần cảnh báo và tối ưu tiến độ.',
+        features: ['Cảnh báo công việc có nguy cơ trễ', 'Cảnh báo thiếu nguyên liệu', 'Phân tích hiệu suất sản xuất', 'Phát hiện điểm nghẽn trong quy trình', 'Đề xuất tối ưu tiến độ và nguồn lực'],
         icon: Sparkles,
         accent: 'violet',
     },
     {
-        id: 'pro',
-        name: 'AI Pro',
-        eyebrow: 'Token xịn hơn',
+        id: 'enterprise',
+        name: 'Enterprise',
+        eyebrow: 'Quy mô doanh nghiệp',
         price: '249.000đ',
         priceNote: 'tháng',
-        tokenLimit: '1.5M token',
-        model: 'ORCA Max',
-        description: 'Dành cho người dùng chat AI thường xuyên và cần xử lý nhiều nội dung hơn.',
-        features: ['Mô hình suy luận tốt hơn', 'Phân tích file và yêu cầu dài', 'Tóm tắt lịch sử nhóm', 'Xuất prompt và biên bản công việc'],
+        tokenLimit: 'Nhiều xưởng',
+        model: 'AI quản lý doanh nghiệp',
+        description: 'Dành cho doanh nghiệp nhiều xưởng cần lập kế hoạch và dự báo dài hạn.',
+        features: ['Lập kế hoạch sản xuất dài hạn', 'Dự báo nhu cầu và công suất', 'Mô phỏng trước các kịch bản sản xuất', 'Quản lý nhiều xưởng trên một nền tảng', 'Thương hiệu riêng cho doanh nghiệp'],
         icon: Zap,
         accent: 'green',
     },
 ];
 
 export default function UpgradePlanPage() {
-    const [selectedPlanId, setSelectedPlanId] = useState(() => localStorage.getItem('orca-ai-plan') || 'plus');
+    const [selectedPlanId, setSelectedPlanId] = useState(() => localStorage.getItem('orca-ai-plan') || 'professional');
+    const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(() => {
+        const saved = localStorage.getItem('orca-payment-method');
+        return saved === 'MOMO' || saved === 'VNPAY' ? saved : 'MOMO';
+    });
 
     const handleSelectPlan = (plan: Plan) => {
         if (plan.current) {
@@ -79,7 +86,8 @@ export default function UpgradePlanPage() {
             return;
         }
         localStorage.setItem('orca-ai-plan-pending', plan.id);
-        window.location.href = `/vnpay-mock-checkout?planId=${plan.id}`;
+        localStorage.setItem('orca-payment-method', paymentMethod);
+        window.location.href = `/vnpay-mock-checkout?planId=${plan.id}&method=${paymentMethod}`;
     };
 
     return (
@@ -90,11 +98,32 @@ export default function UpgradePlanPage() {
                     ORCA AI
                 </span>
                 <h1>Nâng cấp gói của bạn</h1>
-                <p>Chọn gói AI phù hợp để chat dài hơn, tạo task nhanh hơn và xử lý nhiều ngữ cảnh vận hành hơn.</p>
+                <p>Chọn gói AI phù hợp để tối ưu quy trình và nâng cao năng suất nhà máy của bạn.</p>
                 <div className="upgrade-billing-toggle" aria-label="Chu kỳ thanh toán">
                     <button className="active" type="button">Hàng tháng</button>
                     <button type="button">Hàng năm <span>Tiết kiệm</span></button>
                 </div>
+            </section>
+
+            <section className="payment-methods" aria-label="Phương thức thanh toán">
+                <button
+                    type="button"
+                    className={paymentMethod === 'MOMO' ? 'active momo' : 'momo'}
+                    onClick={() => setPaymentMethod('MOMO')}
+                >
+                    <Smartphone size={18} />
+                    <span>MoMo QR</span>
+                    <small>Quét mã ảo từ điện thoại</small>
+                </button>
+                <button
+                    type="button"
+                    className={paymentMethod === 'VNPAY' ? 'active vnpay' : 'vnpay'}
+                    onClick={() => setPaymentMethod('VNPAY')}
+                >
+                    <QrCode size={18} />
+                    <span>VNPay QR</span>
+                    <small>Mobile banking / ví điện tử</small>
+                </button>
             </section>
 
             <section className="upgrade-grid">

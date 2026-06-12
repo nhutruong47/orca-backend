@@ -44,7 +44,8 @@ const navItems = [
   { label: 'Trang chủ', target: 'hero' },
   { label: 'Giới thiệu', target: 'solution' },
   { label: 'Tính năng', target: 'features' },
-  { label: 'Hỏi đáp', target: 'ai' }
+  { label: 'Hỏi đáp', target: 'ai' },
+  { label: 'Hỗ trợ', target: 'support' }
 ];
 
 const stats = [
@@ -185,23 +186,54 @@ const workshops = [
 
 const pricingPlans = [
   {
-    name: 'Free Chat',
+    name: 'Starter',
     price: '0đ',
-    note: 'Gói hiện tại để dùng thử AI trong nhóm',
-    features: ['50K token/tháng', 'ORCA Lite', 'Chat AI cơ bản']
+    note: 'AI quản lý công việc cho xưởng nhỏ',
+    features: ['AI tạo task từ đơn hàng', 'AI giao việc cho nhân viên', 'Theo dõi tiến độ sản xuất', 'Quản lý đơn hàng và batch', 'Báo cáo vận hành cơ bản'],
+    cta: 'Bắt đầu'
   },
   {
-    name: 'AI Plus',
+    name: 'Professional',
     price: '129.000đ',
-    note: 'Phù hợp cá nhân cần chat dài hơn',
-    features: ['500K token/tháng', 'ORCA Smart', 'Ưu tiên tốc độ phản hồi']
+    note: 'AI điều phối sản xuất cho xưởng đang tăng trưởng',
+    features: ['Cảnh báo công việc có nguy cơ trễ', 'Cảnh báo thiếu nguyên liệu', 'Phân tích hiệu suất sản xuất', 'Phát hiện điểm nghẽn trong quy trình', 'Đề xuất tối ưu tiến độ và nguồn lực'],
+    cta: 'Nâng cấp ngay',
+    featured: true
   },
   {
-    name: 'AI Pro',
+    name: 'Enterprise',
     price: '249.000đ',
-    note: 'Dành cho người dùng cần xử lý nhiều nội dung',
-    features: ['1.5M token/tháng', 'ORCA Max', 'Phân tích yêu cầu dài']
+    note: 'AI quản lý doanh nghiệp nhiều xưởng',
+    features: ['Lập kế hoạch sản xuất dài hạn', 'Dự báo nhu cầu và công suất', 'Mô phỏng trước các kịch bản sản xuất', 'Quản lý nhiều xưởng trên một nền tảng', 'Thương hiệu riêng cho doanh nghiệp'],
+    cta: 'Nâng cấp ngay'
   }
+];
+
+const supportOptions = [
+  {
+    title: 'Hotline hỗ trợ',
+    detail: 'Trao đổi nhanh khi cần xử lý tài khoản, thanh toán hoặc lỗi vận hành.',
+    action: '0328 416 716',
+    icon: Phone,
+  },
+  {
+    title: 'Email hỗ trợ',
+    detail: 'Gửi mô tả vấn đề, ảnh màn hình hoặc yêu cầu tích hợp cho đội ORCA.',
+    action: 'orca@gmail.com',
+    icon: Mail,
+  },
+  {
+    title: 'Hướng dẫn sử dụng',
+    detail: 'Thiết lập xưởng, phân quyền nhân viên, tạo đơn và dùng AI lập kế hoạch.',
+    action: 'Xem tài liệu',
+    icon: ShieldCheck,
+  },
+  {
+    title: 'Triển khai cho xưởng',
+    detail: 'Đồng hành cấu hình quy trình, dữ liệu mẫu và luồng bàn giao cho đội sản xuất.',
+    action: 'Đặt lịch tư vấn',
+    icon: Users,
+  },
 ];
 
 export default function HomePage() {
@@ -603,18 +635,43 @@ export default function HomePage() {
         </div>
         <div className="coffee-pricing-grid">
           {pricingPlans.map((plan, index) => (
-            <article className="coffee-pricing-card" key={plan.name} data-reveal="product" style={{ transitionDelay: `${index * 100}ms` }}>
+            <article className={`coffee-pricing-card ${plan.featured ? 'featured' : ''}`} key={plan.name} data-reveal="product" style={{ transitionDelay: `${index * 100}ms` }}>
+              {plan.featured && <span className="coffee-plan-badge">★ Phổ biến nhất</span>}
               <h3>{plan.name}</h3>
-              <strong>{plan.price}</strong>
+              <strong>{plan.price}<small>/tháng</small></strong>
               <p>{plan.note}</p>
               {plan.features.map((feature) => (
                 <span key={feature}><CheckCircle size={16} /> {feature}</span>
               ))}
               <button className="coffee-button coffee-button--dark" onClick={() => navigate('/login?returnUrl=/upgrade')}>
-                Bắt đầu
+                {plan.cta}
               </button>
             </article>
           ))}
+        </div>
+      </section>
+
+      <section id="support" className="coffee-support">
+        <div className="coffee-section-heading coffee-section-heading--center" data-reveal="up">
+          <span className="coffee-kicker">Support</span>
+          <h2>Luôn có đội hỗ trợ khi xưởng cần xử lý nhanh.</h2>
+        </div>
+
+        <div className="coffee-support-grid">
+          {supportOptions.map((item, index) => {
+            const Icon = item.icon;
+
+            return (
+              <article className="coffee-support-card" key={item.title} data-reveal="product" style={{ transitionDelay: `${index * 80}ms` }}>
+                <span className="coffee-support-icon">
+                  <Icon size={22} />
+                </span>
+                <h3>{item.title}</h3>
+                <p>{item.detail}</p>
+                <strong>{item.action}</strong>
+              </article>
+            );
+          })}
         </div>
       </section>
 

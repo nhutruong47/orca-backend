@@ -58,6 +58,15 @@ public class TaskController {
         }
     }
 
+    @PatchMapping("/{id}")
+    public ResponseEntity<?> updateTask(@PathVariable UUID id, @RequestBody Map<String, Object> body) {
+        try {
+            return ResponseEntity.ok(taskService.update(id, body));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @PatchMapping("/{id}/status")
     public ResponseEntity<?> updateStatus(@PathVariable UUID id, @RequestBody Map<String, String> body) {
         try {

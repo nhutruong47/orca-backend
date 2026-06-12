@@ -65,7 +65,11 @@ public class SecurityConfig {
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers("/api/payments/vnpay/return", "/api/payments/vnpay/ipn").permitAll()
+                        .requestMatchers(
+                                "/api/payments/vnpay/return",
+                                "/api/payments/vnpay/ipn",
+                                "/api/payments/momo/return",
+                                "/api/payments/momo/ipn").permitAll()
                         .requestMatchers("/api/debug/**").permitAll()
                         .requestMatchers("/api/teams/all").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()

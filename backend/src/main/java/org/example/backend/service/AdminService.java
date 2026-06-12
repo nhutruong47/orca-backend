@@ -374,6 +374,7 @@ public class AdminService {
         map.put("amount", payment.getAmount());
         map.put("status", payment.getStatus());
         map.put("bankCode", safeText(payment.getBankCode(), ""));
+        map.put("paymentMethod", safeText(payment.getPaymentMethod(), ""));
         map.put("createdAt", payment.getCreatedAt() != null ? payment.getCreatedAt().toString() : null);
         map.put("paidAt", payment.getPaidAt() != null ? payment.getPaidAt().toString() : null);
         return map;

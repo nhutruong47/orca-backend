@@ -17,11 +17,9 @@ import {
   FileBarChart,
   Filter,
   Gauge,
-  GitBranch,
   GripVertical,
   Lock,
   MoreHorizontal,
-  Percent,
   Plus,
   ReceiptText,
   RotateCcw,
@@ -29,7 +27,6 @@ import {
   Server,
   Settings,
   ShieldCheck,
-  ShoppingCart,
   Unlock,
   UserCheck,
   Users,
@@ -148,8 +145,6 @@ const emptyOverview: AdminOverview = {
 
 const realDataNote = 'Từ dữ liệu hệ thống';
 
-const percentValue = (part: number, total: number) => total > 0 ? `${((part / total) * 100).toFixed(1)}%` : '0%';
-
 const periodChangeNote = (current: number, previous: number, period = 'tháng trước') => {
   if (previous <= 0) return realDataNote;
   const change = ((current - previous) / previous) * 100;
@@ -178,24 +173,16 @@ const paymentCustomerName = (payment: AdminPayment) =>
   payment.fullName || payment.username || payment.email || 'Không rõ người dùng';
 
 const buildKpis = (overview: AdminOverview): KpiItem[] => [
-  { label: 'Doanh nghiệp / xưởng', value: number(overview.totalTeams), detail: realDataNote, icon: Building2, tone: 'coffee' },
-  { label: 'Tổng người dùng', value: number(overview.totalUsers), detail: realDataNote, icon: Users, tone: 'blue' },
-  { label: 'Đơn đang xử lý', value: number(overview.activeOrders + overview.activeProductionOrders), detail: 'Đơn liên xưởng + đơn sản xuất', icon: ShoppingCart, tone: 'amber' },
-  { label: 'Batch sản xuất', value: number(overview.totalBatches), detail: `${number(overview.activeBatches)} batch đang chạy`, icon: GitBranch, tone: 'green' },
   { label: 'Tài khoản nhân viên', value: number(overview.memberUsers), detail: `${number(overview.adminUsers)} admin`, icon: UserCheck, tone: 'violet' },
   { label: 'Doanh thu tháng', value: money(overview.revenueThisMonth), detail: periodChangeNote(overview.revenueThisMonth, overview.revenuePreviousMonth), icon: DollarSign, tone: 'green' },
   { label: 'Doanh thu năm', value: money(overview.revenueThisYear), detail: periodChangeNote(overview.revenueThisYear, overview.revenuePreviousYear, 'năm trước'), icon: DollarSign, tone: 'coffee' },
-  { label: 'User mới tháng này', value: number(overview.newUsersThisMonth), detail: periodChangeNote(overview.newUsersThisMonth, overview.newUsersPreviousMonth), icon: ArrowUpDown, tone: 'blue' },
-  { label: 'Xưởng mới tháng này', value: number(overview.newTeamsThisMonth), detail: periodChangeNote(overview.newTeamsThisMonth, overview.newTeamsPreviousMonth), icon: Building2, tone: 'amber' },
-  { label: 'Công việc hoàn thành', value: percentValue(overview.completedTasks, overview.totalTasks), detail: `${number(overview.completedTasks)}/${number(overview.totalTasks)} task`, icon: Percent, tone: 'green' },
-  { label: 'Việc quá hạn', value: number(overview.overdueTasks + overview.overdueProductionOrders), detail: 'Task + đơn sản xuất quá hạn', icon: AlertTriangle, tone: 'amber' },
-  { label: 'Mục tiêu đang chạy', value: number(overview.activeGoals), detail: `${number(overview.totalGoals)} mục tiêu tổng`, icon: Gauge, tone: 'violet' }
+  { label: 'User mới tháng này', value: number(overview.newUsersThisMonth), detail: periodChangeNote(overview.newUsersThisMonth, overview.newUsersPreviousMonth), icon: ArrowUpDown, tone: 'blue' }
 ];
 
 const plans = [
-  { name: 'Starter', price: 499000, period: 'Tháng', users: 5, orders: 100, batches: 300, workshops: 1, ai: 5000, features: ['Order board', 'Batch tracking', 'Basic reports'] },
-  { name: 'Growth', price: 1499000, period: 'Tháng', users: 30, orders: 1000, batches: 5000, workshops: 5, ai: 40000, features: ['QC workflow', 'AI assistant', 'Billing export'] },
-  { name: 'Enterprise', price: 0, period: 'Năm', users: 500, orders: 99999, batches: 99999, workshops: 50, ai: 500000, features: ['SLA', 'Custom workflow', 'Dedicated AI limit'] }
+  { name: 'Starter', price: 0, period: 'Tháng', users: 5, orders: 100, batches: 300, workshops: 1, ai: 5000, features: ['AI tạo task từ đơn hàng', 'AI giao việc cho nhân viên', 'Báo cáo vận hành cơ bản'] },
+  { name: 'Professional', price: 129000, period: 'Tháng', users: 30, orders: 1000, batches: 5000, workshops: 5, ai: 40000, features: ['Cảnh báo nguy cơ trễ', 'Cảnh báo thiếu nguyên liệu', 'Phân tích hiệu suất sản xuất'] },
+  { name: 'Enterprise', price: 249000, period: 'Tháng', users: 500, orders: 99999, batches: 99999, workshops: 50, ai: 500000, features: ['Lập kế hoạch dài hạn', 'Dự báo nhu cầu và công suất', 'Quản lý nhiều xưởng'] }
 ];
 
 const systemMetrics = [
@@ -609,7 +596,7 @@ export default function AdminPage() {
           <div className="admin-toolbar">
             <label><Search size={16} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Tìm tên, mã, người đại diện..." /></label>
             <select value={status} onChange={event => setStatus(event.target.value)}><option>All</option><option>Active</option><option>Trial</option><option>Locked</option></select>
-            <select value={plan} onChange={event => setPlan(event.target.value)}><option>All</option><option>Starter</option><option>Growth</option><option>Enterprise</option></select>
+            <select value={plan} onChange={event => setPlan(event.target.value)}><option>All</option><option>Starter</option><option>Professional</option><option>Enterprise</option></select>
             <button type="button" className="admin-button admin-button-soft"><Filter size={16} /> Ngày đăng ký</button>
           </div>
           <div className="admin-table-wrap">
@@ -657,7 +644,7 @@ export default function AdminPage() {
 
       {active === 'subscriptions' && (
         <section className="admin-card">
-          <div className="admin-card-head"><div><h3>Quản lý gói dịch vụ SaaS</h3><p>Starter, Growth, Enterprise cùng giới hạn user, đơn hàng, batch, xưởng và AI credits.</p></div><button className="admin-button admin-button-primary"><Plus size={16} /> Tạo gói</button></div>
+          <div className="admin-card-head"><div><h3>Quản lý gói dịch vụ SaaS</h3><p>Starter, Professional, Enterprise cùng giới hạn user, đơn hàng, batch, xưởng và AI credits.</p></div><button className="admin-button admin-button-primary"><Plus size={16} /> Tạo gói</button></div>
           <div className="admin-plan-grid">
             {plans.map(item => <article className="admin-plan" key={item.name}><h4>{item.name}</h4><strong>{item.price ? money(item.price) : 'Liên hệ'}</strong><span>{item.period}</span><div className="admin-plan-limits"><p>{item.users} users</p><p>{number(item.orders)} orders</p><p>{number(item.batches)} batch</p><p>{item.workshops} xưởng</p><p>{number(item.ai)} AI credits</p></div><ul>{item.features.map(feature => <li key={feature}>{feature}</li>)}</ul><div className="admin-row-actions"><button>Sửa</button><button>Xóa</button></div></article>)}
           </div>

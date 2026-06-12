@@ -42,6 +42,12 @@ public class PaymentTransaction {
     @Column(name = "bank_code")
     private String bankCode;
 
+    @Column(name = "payment_method", length = 24)
+    private String paymentMethod;
+
+    @Column(name = "qr_payload", length = 512)
+    private String qrPayload;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -127,6 +133,22 @@ public class PaymentTransaction {
 
     public void setBankCode(String bankCode) {
         this.bankCode = bankCode;
+    }
+
+    public String getPaymentMethod() {
+        return paymentMethod;
+    }
+
+    public void setPaymentMethod(String paymentMethod) {
+        this.paymentMethod = paymentMethod;
+    }
+
+    public String getQrPayload() {
+        return qrPayload;
+    }
+
+    public void setQrPayload(String qrPayload) {
+        this.qrPayload = qrPayload;
     }
 
     public LocalDateTime getCreatedAt() {
