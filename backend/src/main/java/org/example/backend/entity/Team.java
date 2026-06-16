@@ -40,12 +40,10 @@ public class Team {
     @Column(name = "capacity_unit")
     private String capacityUnit;
 
-    @Lob
-    @Column(name = "factory_image_url")
+    @Column(name = "factory_image_url", columnDefinition = "TEXT")
     private String factoryImageUrl;
 
-    @Lob
-    @Column(name = "factory_images")
+    @Column(name = "factory_images", columnDefinition = "TEXT")
     private String factoryImages;
 
     @Column(name = "verification_status")

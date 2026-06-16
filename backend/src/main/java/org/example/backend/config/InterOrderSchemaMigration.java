@@ -12,6 +12,20 @@ public class InterOrderSchemaMigration {
     ApplicationRunner relaxInterOrderBuyerTeamColumn(JdbcTemplate jdbcTemplate) {
         return args -> {
             try {
+                jdbcTemplate.execute(
+                        "ALTER TABLE teams ALTER COLUMN factory_image_url TYPE TEXT USING factory_image_url::text");
+            } catch (Exception ignored) {
+                // Fresh schemas already use TEXT; this only repairs older PostgreSQL deployments.
+            }
+
+            try {
+                jdbcTemplate.execute(
+                        "ALTER TABLE teams ALTER COLUMN factory_images TYPE TEXT USING factory_images::text");
+            } catch (Exception ignored) {
+                // Fresh schemas already use TEXT; this only repairs older PostgreSQL deployments.
+            }
+
+            try {
                 jdbcTemplate.execute("ALTER TABLE inter_group_orders ADD COLUMN IF NOT EXISTS buyer_user_id UUID");
             } catch (Exception ignored) {
                 // Hibernate creates the column in fresh databases; this is only for older local H2 files.

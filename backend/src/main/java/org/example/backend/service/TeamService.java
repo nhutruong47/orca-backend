@@ -41,6 +41,7 @@ public class TeamService {
     /**
      * Lấy tất cả nhóm mà user tham gia
      */
+    @Transactional(readOnly = true)
     public List<TeamDTO> getTeamsForUser(String username) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -54,6 +55,7 @@ public class TeamService {
     /**
      * Lấy tất cả nhóm trên hệ thống có đăng quảng cáo (cho Marketplace)
      */
+    @Transactional(readOnly = true)
     public List<TeamDTO> getAllTeams() {
         return teamRepository.findAll().stream()
                 .filter(Team::isPublished)
@@ -64,6 +66,7 @@ public class TeamService {
     /**
      * Xem chi tiết nhóm (bao gồm danh sách thành viên)
      */
+    @Transactional(readOnly = true)
     public TeamDTO getTeamDetail(UUID teamId) {
         Team team = teamRepository.findById(teamId)
                 .orElseThrow(() -> new RuntimeException("Team not found"));
