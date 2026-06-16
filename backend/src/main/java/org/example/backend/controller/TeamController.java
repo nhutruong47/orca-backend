@@ -20,8 +20,13 @@ public class TeamController {
 
     /** Lấy danh sách nhóm của user hiện tại */
     @GetMapping
-    public ResponseEntity<List<TeamDTO>> getMyTeams(Authentication auth) {
-        return ResponseEntity.ok(teamService.getTeamsForUser(auth.getName()));
+    public ResponseEntity<?> getMyTeams(Authentication auth) {
+        try {
+            return ResponseEntity.ok(teamService.getTeamsForUser(auth.getName()));
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.badRequest().body(Map.of("error", e.getClass().getSimpleName() + ": " + e.getMessage()));
+        }
     }
 
     /** Lấy danh sách tất cả các nhóm (cho Marketplace) */
