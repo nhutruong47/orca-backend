@@ -72,13 +72,13 @@ public class Team {
     @Column(name = "verification_reject_reason", length = 1000)
     private String verificationRejectReason;
 
-    @Column(name = "completed_orders", nullable = false)
+    @Column(name = "completed_orders", nullable = false, columnDefinition = "integer default 0")
     private int completedOrders = 0;
 
-    @Column(name = "cancelled_orders", nullable = false)
+    @Column(name = "cancelled_orders", nullable = false, columnDefinition = "integer default 0")
     private int cancelledOrders = 0;
 
-    @Column(name = "total_orders", nullable = false)
+    @Column(name = "total_orders", nullable = false, columnDefinition = "integer default 0")
     private int totalOrders = 0;
 
     @Column(name = "invite_code", unique = true, length = 6)
