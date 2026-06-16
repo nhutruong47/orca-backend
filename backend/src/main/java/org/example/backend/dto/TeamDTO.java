@@ -20,6 +20,19 @@ public class TeamDTO {
     private String specialty;
     private String capacity;
     private String region;
+    private String factoryType;
+    private Double capacityValue;
+    private String capacityUnit;
+    private String factoryImageUrl;
+    private List<String> factoryImages;
+    private String verificationStatus;
+    private String businessLicense;
+    private String businessAddress;
+    private String websiteUrl;
+    private String facebookUrl;
+    private List<String> certificates;
+    private String certificationDocument;
+    private String verificationRejectReason;
 
     // Trust fields
     private int completedOrders;
@@ -207,6 +220,110 @@ public class TeamDTO {
 
     public void setRegion(String region) {
         this.region = region;
+    }
+
+    public String getFactoryType() {
+        return factoryType;
+    }
+
+    public void setFactoryType(String factoryType) {
+        this.factoryType = factoryType;
+    }
+
+    public Double getCapacityValue() {
+        return capacityValue;
+    }
+
+    public void setCapacityValue(Double capacityValue) {
+        this.capacityValue = capacityValue;
+    }
+
+    public String getCapacityUnit() {
+        return capacityUnit;
+    }
+
+    public void setCapacityUnit(String capacityUnit) {
+        this.capacityUnit = capacityUnit;
+    }
+
+    public String getFactoryImageUrl() {
+        return factoryImageUrl;
+    }
+
+    public void setFactoryImageUrl(String factoryImageUrl) {
+        this.factoryImageUrl = factoryImageUrl;
+    }
+
+    public List<String> getFactoryImages() {
+        return factoryImages;
+    }
+
+    public void setFactoryImages(List<String> factoryImages) {
+        this.factoryImages = factoryImages;
+    }
+
+    public String getVerificationStatus() {
+        return verificationStatus;
+    }
+
+    public void setVerificationStatus(String verificationStatus) {
+        this.verificationStatus = verificationStatus;
+    }
+
+    public String getBusinessLicense() {
+        return businessLicense;
+    }
+
+    public void setBusinessLicense(String businessLicense) {
+        this.businessLicense = businessLicense;
+    }
+
+    public String getBusinessAddress() {
+        return businessAddress;
+    }
+
+    public void setBusinessAddress(String businessAddress) {
+        this.businessAddress = businessAddress;
+    }
+
+    public String getWebsiteUrl() {
+        return websiteUrl;
+    }
+
+    public void setWebsiteUrl(String websiteUrl) {
+        this.websiteUrl = websiteUrl;
+    }
+
+    public String getFacebookUrl() {
+        return facebookUrl;
+    }
+
+    public void setFacebookUrl(String facebookUrl) {
+        this.facebookUrl = facebookUrl;
+    }
+
+    public List<String> getCertificates() {
+        return certificates;
+    }
+
+    public void setCertificates(List<String> certificates) {
+        this.certificates = certificates;
+    }
+
+    public String getCertificationDocument() {
+        return certificationDocument;
+    }
+
+    public void setCertificationDocument(String certificationDocument) {
+        this.certificationDocument = certificationDocument;
+    }
+
+    public String getVerificationRejectReason() {
+        return verificationRejectReason;
+    }
+
+    public void setVerificationRejectReason(String verificationRejectReason) {
+        this.verificationRejectReason = verificationRejectReason;
     }
 
     public int getCompletedOrders() {

@@ -260,6 +260,23 @@ public class AdminService {
     }
 
     @Transactional
+    public Map<String, Object> updateTeamVerification(UUID teamId, String status, String rejectReason) {
+        if (status == null || status.isBlank()) {
+            throw new RuntimeException("Verification status is required");
+        }
+        String normalized = status.toUpperCase(Locale.ROOT);
+        if (!List.of("APPROVED", "REJECTED").contains(normalized)) {
+            throw new RuntimeException("Verification status is invalid");
+        }
+
+        Team team = teamRepository.findById(teamId)
+                .orElseThrow(() -> new RuntimeException("Team not found"));
+        team.setVerificationStatus(normalized);
+        team.setVerificationRejectReason("REJECTED".equals(normalized) ? safeText(rejectReason, "") : "");
+        return toTeamMap(teamRepository.save(team));
+    }
+
+    @Transactional
     public Map<String, Object> updateTaskStatus(UUID taskId, String status) {
         if (status == null || status.isBlank()) {
             throw new RuntimeException("Status is required");
@@ -311,12 +328,25 @@ public class AdminService {
         map.put("specialty", safeText(team.getSpecialty(), ""));
         map.put("capacity", safeText(team.getCapacity(), ""));
         map.put("region", safeText(team.getRegion(), ""));
+        map.put("factoryType", safeText(team.getFactoryType(), ""));
+        map.put("capacityValue", team.getCapacityValue());
+        map.put("capacityUnit", safeText(team.getCapacityUnit(), ""));
+        map.put("factoryImageUrl", safeText(team.getFactoryImageUrl(), ""));
+        map.put("factoryImages", splitList(team.getFactoryImages()));
+        map.put("verificationStatus", safeText(team.getVerificationStatus(), "NOT_SUBMITTED"));
+        map.put("businessLicense", safeText(team.getBusinessLicense(), ""));
+        map.put("businessAddress", safeText(team.getBusinessAddress(), ""));
+        map.put("websiteUrl", safeText(team.getWebsiteUrl(), ""));
+        map.put("facebookUrl", safeText(team.getFacebookUrl(), ""));
+        map.put("certificates", splitList(team.getCertificates()));
+        map.put("certificationDocument", safeText(team.getCertificationDocument(), ""));
+        map.put("verificationRejectReason", safeText(team.getVerificationRejectReason(), ""));
         map.put("completedOrders", team.getCompletedOrders());
         map.put("cancelledOrders", team.getCancelledOrders());
         map.put("totalOrders", team.getTotalOrders());
         map.put("trustScore", team.getTotalOrders() > 0
                 ? (int) ((double) team.getCompletedOrders() / team.getTotalOrders() * 100)
-                : 100);
+                : 0);
         return map;
     }
 
@@ -326,7 +356,12 @@ public class AdminService {
         map.put("title", order.getTitle());
         map.put("description", safeText(order.getDescription(), ""));
         map.put("buyerTeamId", order.getBuyerTeam() != null ? order.getBuyerTeam().getId().toString() : "");
-        map.put("buyerTeamName", order.getBuyerTeam() != null ? order.getBuyerTeam().getName() : "");
+        String buyerUserName = order.getBuyerUser() != null
+                ? safeText(order.getBuyerUser().getFullName(), order.getBuyerUser().getUsername())
+                : "";
+        map.put("buyerTeamName", order.getBuyerTeam() != null ? order.getBuyerTeam().getName() : buyerUserName);
+        map.put("buyerUserId", order.getBuyerUser() != null ? order.getBuyerUser().getId().toString() : "");
+        map.put("buyerUserName", buyerUserName);
         map.put("sellerTeamId", order.getSellerTeam() != null ? order.getSellerTeam().getId().toString() : "");
         map.put("sellerTeamName", order.getSellerTeam() != null ? order.getSellerTeam().getName() : "");
         map.put("quantity", order.getQuantity());
@@ -382,6 +417,16 @@ public class AdminService {
 
     private String safeText(String value, String fallback) {
         return value != null ? value : fallback;
+    }
+
+    private List<String> splitList(String value) {
+        if (value == null || value.isBlank()) {
+            return List.of();
+        }
+        return value.lines()
+                .map(String::trim)
+                .filter(item -> !item.isBlank())
+                .toList();
     }
 
     private int compareCreatedAtDesc(User left, User right) {

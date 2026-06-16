@@ -2231,6 +2231,11 @@ body.luxury-home-page {
     0 2px 10px rgba(0, 0, 0, 0.46);
 }
 
+.coffee-workshops .coffee-kicker {
+  color: #4b3321 !important;
+  text-shadow: none;
+}
+
 .coffee-ai-section,
 .coffee-problem-panel {
   background:

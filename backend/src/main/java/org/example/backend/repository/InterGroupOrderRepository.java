@@ -10,6 +10,8 @@ public interface InterGroupOrderRepository extends JpaRepository<InterGroupOrder
     // Đơn mình đi đặt (Xưởng của mình là Buyer)
     List<InterGroupOrder> findByBuyerTeamIdOrderByCreatedAtDesc(UUID buyerTeamId);
 
+    List<InterGroupOrder> findByBuyerUserIdOrderByCreatedAtDesc(UUID buyerUserId);
+
     // Đơn xưởng khác đặt mình (Xưởng của mình là Seller)
     List<InterGroupOrder> findBySellerTeamIdOrderByCreatedAtDesc(UUID sellerTeamId);
 }

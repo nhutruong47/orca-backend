@@ -366,6 +366,7 @@ export default function AdminPage() {
   }, [adminUsers, query, userPage]);
 
   const businessRows = adminTeams.map(item => ({
+    id: item.id,
     name: item.name,
     code: item.id.slice(0, 8),
     owner: item.ownerName || '-',
@@ -376,13 +377,32 @@ export default function AdminPage() {
     batches: 0,
     plan: '-',
     date: item.createdAt ? formatShortDate(item.createdAt) : '-',
-    status: item.published ? 'Published' : 'Private'
+    status: item.published ? 'Published' : 'Private',
+    verificationStatus: item.verificationStatus || 'NOT_SUBMITTED',
+    businessLicense: item.businessLicense || '',
+    businessAddress: item.businessAddress || '',
+    websiteUrl: item.websiteUrl || '',
+    certificationDocument: item.certificationDocument || '',
+    verificationRejectReason: item.verificationRejectReason || ''
   })).filter(item => {
     const matchesText = `${item.name} ${item.code} ${item.owner}`.toLowerCase().includes(query.toLowerCase());
     const matchesStatus = status === 'All' || item.status === status;
     const matchesPlan = plan === 'All' || item.plan === plan;
     return matchesText && matchesStatus && matchesPlan;
   });
+
+  const updateTeamVerification = async (teamId: string, nextStatus: 'APPROVED' | 'REJECTED') => {
+    const rejectReason = nextStatus === 'REJECTED'
+      ? window.prompt('Lý do từ chối hồ sơ xác minh?', 'Hồ sơ chưa đủ thông tin.')
+      : '';
+    if (nextStatus === 'REJECTED' && rejectReason === null) return;
+    try {
+      const updated = await adminService.updateTeamVerification(teamId, nextStatus, rejectReason || '');
+      setAdminTeams(current => current.map(item => item.id === teamId ? { ...item, ...updated } : item));
+    } catch {
+      window.alert('Không thể cập nhật trạng thái xác minh.');
+    }
+  };
 
   const revenueReport = useMemo(() => {
     const fromDate = parseDateInput(revenueFrom);
@@ -601,12 +621,32 @@ export default function AdminPage() {
           </div>
           <div className="admin-table-wrap">
             <table className="admin-table">
-              <thead><tr><th>Tên doanh nghiệp</th><th>Mã</th><th>Đại diện</th><th>Email</th><th>Điện thoại</th><th>NV</th><th>Đơn</th><th>Batch</th><th>Gói</th><th>Ngày ĐK</th><th>Trạng thái</th><th></th></tr></thead>
+              <thead><tr><th>Tên doanh nghiệp</th><th>Mã</th><th>Đại diện</th><th>Email</th><th>Điện thoại</th><th>NV</th><th>Đơn</th><th>Batch</th><th>Gói</th><th>Ngày ĐK</th><th>Trạng thái</th><th>Xác minh</th><th></th></tr></thead>
               <tbody>
                 {businessRows.map(item => (
                   <tr key={item.code}>
                     <td><strong>{item.name}</strong></td><td>{item.code}</td><td>{item.owner}</td><td>{item.email}</td><td>{item.phone}</td><td>{item.employees}</td><td>{item.orders}</td><td>{item.batches}</td><td>{item.plan}</td><td>{item.date}</td><td><StatusBadge value={String(item.status)} /></td>
-                    <td><div className="admin-row-actions"><button>Sửa</button><button><Lock size={14} /> Khóa</button><button>Xóa</button></div></td>
+                    <td>
+                      <div className="admin-verification-cell">
+                        <StatusBadge value={String(item.verificationStatus)} />
+                        <small>GPL: {item.businessLicense || '-'}</small>
+                        <small>ĐC: {item.businessAddress || '-'}</small>
+                        {item.websiteUrl && <small>Web: {item.websiteUrl}</small>}
+                        {item.certificationDocument && <small>Cert: {item.certificationDocument}</small>}
+                        {item.verificationRejectReason && <small>Lý do: {item.verificationRejectReason}</small>}
+                      </div>
+                    </td>
+                    <td>
+                      <div className="admin-row-actions">
+                        <button>Sửa</button>
+                        {item.verificationStatus === 'PENDING' && <>
+                          <button onClick={() => updateTeamVerification(item.id, 'APPROVED')}><CheckCircle2 size={14} /> Duyệt</button>
+                          <button onClick={() => updateTeamVerification(item.id, 'REJECTED')}><XCircle size={14} /> Từ chối</button>
+                        </>}
+                        <button><Lock size={14} /> Khóa</button>
+                        <button>Xóa</button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>

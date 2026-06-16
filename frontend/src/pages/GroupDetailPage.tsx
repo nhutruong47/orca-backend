@@ -141,9 +141,7 @@ export default function GroupDetailPage() {
     const [dmPreviews, setDmPreviews] = useState<ChatMsg[]>([]);
 
     const currentMember = team?.members?.find(m => m.userId === user?.id);
-    const isSystemAdmin = user?.role === 'ADMIN';
-    const isAdmin = currentMember?.groupRole === 'ADMIN' || team?.ownerId === user?.id;
-    const isManager = !isSystemAdmin && isAdmin;
+    const isAdmin = currentMember?.groupRole === 'ADMIN' || currentMember?.groupRole === 'OWNER' || team?.ownerId === user?.id;
 
     useEffect(() => {
         if (!team || !user) return;
@@ -616,7 +614,7 @@ export default function GroupDetailPage() {
             </div>
 
             {/* ===== STATS CARDS ===== */}
-            {isManager && (
+            {isAdmin && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 18 }}>
                 {[
                     { label: 'Tổng công việc', value: totalTasks, icon: 'clipboard-outline', bg: '#f9f1e3', color: '#d4a574' },
@@ -638,7 +636,7 @@ export default function GroupDetailPage() {
             )}
 
             {/* ===== EMPTY STATE / ANALYTICS ===== */}
-            {isManager && (totalTasks === 0 ? (
+            {isAdmin && (totalTasks === 0 ? (
                 <div style={{ background: 'var(--bg-card)', borderRadius: 16, padding: '28px 24px', border: '1px solid var(--border)', marginBottom: 18, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                         <div style={{ width: 48, height: 48, borderRadius: 14, background: 'rgba(212, 165, 116, 0.12)', color: 'var(--accent-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>
@@ -653,7 +651,7 @@ export default function GroupDetailPage() {
             ) : (
             <>
             {/* ===== LINE CHART ===== */}
-            {isManager && (
+            {isAdmin && (
                 <div style={{ background: '#fff', borderRadius: 14, padding: '20px 24px', border: '1px solid #e2e8f0', marginBottom: 18 }}>
                     <h3 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 700, color: '#1e293b' }}>Hiệu suất nhân viên trong tuần</h3>
                 <ResponsiveContainer width="100%" height={220}>
@@ -672,7 +670,7 @@ export default function GroupDetailPage() {
             )}
 
             {/* ===== TWO COL: DONUT + BAR ===== */}
-            <div style={{ display: 'grid', gridTemplateColumns: isManager ? 'repeat(auto-fit, minmax(320px, 1fr))' : '1fr', gap: 16, marginBottom: 18 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isAdmin ? 'repeat(auto-fit, minmax(320px, 1fr))' : '1fr', gap: 16, marginBottom: 18 }}>
                 {/* Donut */}
                 <div style={{ background: '#fff', borderRadius: 14, padding: '20px 24px', border: '1px solid #e2e8f0' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -699,7 +697,7 @@ export default function GroupDetailPage() {
                 </div>
 
                 {/* Bar */}
-                {isManager && (
+                {isAdmin && (
                 <div style={{ background: '#fff', borderRadius: 14, padding: '20px 24px', border: '1px solid #e2e8f0' }}>
                     <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700, color: '#1e293b' }}>So sánh thành viên</h3>
                     <ResponsiveContainer width="100%" height={140}>
@@ -719,7 +717,7 @@ export default function GroupDetailPage() {
             ))}
 
             {/* ===== MEMBER CARDS ===== */}
-            {visibleMemberStats.length > 0 && (
+            {isAdmin && visibleMemberStats.length > 0 && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 260px))', gap: 14, marginBottom: 18 }}>
                 {visibleMemberStats.map(m => {
                         const displayName = m.fullName || m.username;

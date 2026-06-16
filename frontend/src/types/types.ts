@@ -63,6 +63,19 @@ export interface Team {
     specialty?: string;
     capacity?: string;
     region?: string;
+    factoryType?: string;
+    capacityValue?: number;
+    capacityUnit?: string;
+    factoryImageUrl?: string;
+    factoryImages?: string[];
+    verificationStatus?: 'NOT_SUBMITTED' | 'PENDING' | 'APPROVED' | 'REJECTED';
+    businessLicense?: string;
+    businessAddress?: string;
+    websiteUrl?: string;
+    facebookUrl?: string;
+    certificates?: string[];
+    certificationDocument?: string;
+    verificationRejectReason?: string;
 
     // Trust
     completedOrders?: number;
@@ -285,6 +298,19 @@ export interface AdminTeam {
     specialty: string;
     capacity: string;
     region: string;
+    factoryType?: string;
+    capacityValue?: number;
+    capacityUnit?: string;
+    factoryImageUrl?: string;
+    factoryImages?: string[];
+    verificationStatus?: 'NOT_SUBMITTED' | 'PENDING' | 'APPROVED' | 'REJECTED';
+    businessLicense?: string;
+    businessAddress?: string;
+    websiteUrl?: string;
+    facebookUrl?: string;
+    certificates?: string[];
+    certificationDocument?: string;
+    verificationRejectReason?: string;
     completedOrders: number;
     cancelledOrders: number;
     totalOrders: number;

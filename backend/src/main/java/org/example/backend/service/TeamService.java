@@ -250,9 +250,37 @@ public class TeamService {
             team.setCapacity(dto.getCapacity());
         if (dto.getRegion() != null)
             team.setRegion(dto.getRegion());
+        if (dto.getFactoryType() != null)
+            team.setFactoryType(dto.getFactoryType());
+        if (dto.getCapacityValue() != null)
+            team.setCapacityValue(dto.getCapacityValue());
+        if (dto.getCapacityUnit() != null)
+            team.setCapacityUnit(dto.getCapacityUnit());
+        if (dto.getFactoryImageUrl() != null)
+            team.setFactoryImageUrl(dto.getFactoryImageUrl());
+        if (dto.getFactoryImages() != null)
+            team.setFactoryImages(packList(dto.getFactoryImages()));
+        if (dto.getDescription() != null)
+            team.setDescription(dto.getDescription());
 
         team = teamRepository.save(team);
         return toDTO(team, false);
+    }
+
+    @Transactional
+    public TeamDTO submitVerification(UUID teamId, TeamDTO dto, String requesterUsername) {
+        Team team = teamRepository.findById(teamId)
+                .orElseThrow(() -> new RuntimeException("Team not found"));
+
+        User requester = userRepository.findByUsername(requesterUsername)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        checkAdminRole(team, requester);
+
+        updateVerificationFields(team, dto);
+        team.setVerificationStatus("PENDING");
+        team.setVerificationRejectReason(null);
+
+        return toDTO(teamRepository.save(team), false);
     }
 
     /**
@@ -312,6 +340,19 @@ public class TeamService {
         dto.setSpecialty(team.getSpecialty());
         dto.setCapacity(team.getCapacity());
         dto.setRegion(team.getRegion());
+        dto.setFactoryType(team.getFactoryType());
+        dto.setCapacityValue(team.getCapacityValue());
+        dto.setCapacityUnit(team.getCapacityUnit());
+        dto.setFactoryImageUrl(team.getFactoryImageUrl());
+        dto.setFactoryImages(unpackList(team.getFactoryImages()));
+        dto.setVerificationStatus(isBlank(team.getVerificationStatus()) ? "NOT_SUBMITTED" : team.getVerificationStatus());
+        dto.setBusinessLicense(team.getBusinessLicense());
+        dto.setBusinessAddress(team.getBusinessAddress());
+        dto.setWebsiteUrl(team.getWebsiteUrl());
+        dto.setFacebookUrl(team.getFacebookUrl());
+        dto.setCertificates(unpackList(team.getCertificates()));
+        dto.setCertificationDocument(team.getCertificationDocument());
+        dto.setVerificationRejectReason(team.getVerificationRejectReason());
 
         // Trust
         dto.setCompletedOrders(team.getCompletedOrders());
@@ -319,7 +360,7 @@ public class TeamService {
         dto.setTotalOrders(team.getTotalOrders());
         int trust = team.getTotalOrders() > 0
                 ? (int) ((double) team.getCompletedOrders() / team.getTotalOrders() * 100)
-                : 100;
+                : 0;
         dto.setTrustScore(trust);
 
         List<TeamMember> members = teamMemberRepository.findByTeamId(team.getId());
@@ -353,6 +394,45 @@ public class TeamService {
         if (requesterMember.getGroupRole() != GroupRole.ADMIN) {
             throw new RuntimeException("Only group ADMINs can perform this action");
         }
+    }
+
+    private void updateVerificationFields(Team team, TeamDTO dto) {
+        if (dto.getBusinessLicense() != null)
+            team.setBusinessLicense(dto.getBusinessLicense().trim());
+        if (dto.getBusinessAddress() != null)
+            team.setBusinessAddress(dto.getBusinessAddress().trim());
+        if (dto.getWebsiteUrl() != null)
+            team.setWebsiteUrl(dto.getWebsiteUrl().trim());
+        if (dto.getFacebookUrl() != null)
+            team.setFacebookUrl(dto.getFacebookUrl().trim());
+        if (dto.getCertificates() != null)
+            team.setCertificates(packList(dto.getCertificates()));
+        if (dto.getCertificationDocument() != null)
+            team.setCertificationDocument(dto.getCertificationDocument().trim());
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    private String packList(List<String> values) {
+        if (values == null) {
+            return null;
+        }
+        return values.stream()
+                .filter(value -> value != null && !value.isBlank())
+                .map(String::trim)
+                .collect(Collectors.joining("\n"));
+    }
+
+    private List<String> unpackList(String value) {
+        if (isBlank(value)) {
+            return List.of();
+        }
+        return value.lines()
+                .map(String::trim)
+                .filter(item -> !item.isBlank())
+                .toList();
     }
 
     // Cả ADMIN và MEMBER đều có thể mời thành viên mới

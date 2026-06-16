@@ -22,16 +22,23 @@ public class InterGroupOrderService {
     private final InterGroupOrderRepository orderRepo;
     private final TeamRepository teamRepo;
     private final GoalRepository goalRepo;
+    private final NotificationService notificationService;
 
     public InterGroupOrderService(InterGroupOrderRepository orderRepo, TeamRepository teamRepo,
-            GoalRepository goalRepo) {
+            GoalRepository goalRepo, NotificationService notificationService) {
         this.orderRepo = orderRepo;
         this.teamRepo = teamRepo;
         this.goalRepo = goalRepo;
+        this.notificationService = notificationService;
     }
 
     public List<InterGroupOrderDTO> getOutboundOrders(UUID buyerTeamId) {
         return orderRepo.findByBuyerTeamIdOrderByCreatedAtDesc(buyerTeamId)
+                .stream().map(this::toDTO).collect(Collectors.toList());
+    }
+
+    public List<InterGroupOrderDTO> getMyOutboundOrders(User currentUser) {
+        return orderRepo.findByBuyerUserIdOrderByCreatedAtDesc(currentUser.getId())
                 .stream().map(this::toDTO).collect(Collectors.toList());
     }
 
@@ -42,6 +49,39 @@ public class InterGroupOrderService {
 
     @Transactional
     public InterGroupOrderDTO createOrder(InterGroupOrderDTO dto, User currentUser) {
+        if (dto.getBuyerTeamId() == null || dto.getBuyerTeamId().isBlank()) {
+            Team sellerTeam = teamRepo.findById(UUID.fromString(dto.getSellerTeamId()))
+                    .orElseThrow(() -> new RuntimeException("Seller team not found"));
+
+            InterGroupOrder order = new InterGroupOrder();
+            order.setBuyerUser(currentUser);
+            order.setSellerTeam(sellerTeam);
+            order.setTitle(dto.getTitle());
+            order.setDescription(dto.getDescription());
+            order.setQuantity(dto.getQuantity());
+            order.setDeadline(dto.getDeadline());
+            order.setStatus("PENDING");
+            mapDeliveryFields(order, dto);
+
+            InterGroupOrder saved = orderRepo.save(order);
+
+            // Notify seller team owner about new order
+            String buyerName = currentUser.getFullName() != null && !currentUser.getFullName().isBlank()
+                    ? currentUser.getFullName() : currentUser.getUsername();
+            notifyUser(sellerTeam.getOwner(),
+                    "Đơn hàng mới",
+                    "Bạn có đơn hàng mới từ " + buyerName + ": " + order.getTitle(),
+                    "ORDER_CREATED", null);
+
+            // Notify buyer (confirmation)
+            notifyUser(currentUser,
+                    "Đã gửi đơn hàng",
+                    "Đơn hàng \"" + order.getTitle() + "\" đã được gửi đến " + sellerTeam.getName() + ". Chờ phản hồi.",
+                    "ORDER_CREATED", null);
+
+            return toDTO(saved);
+        }
+
         Team buyerTeam = teamRepo.findById(UUID.fromString(dto.getBuyerTeamId()))
                 .orElseThrow(() -> new RuntimeException("Buyer team not found"));
 
@@ -68,12 +108,27 @@ public class InterGroupOrderService {
         order.setQuantity(dto.getQuantity());
         order.setDeadline(dto.getDeadline());
         order.setStatus("PENDING");
+        mapDeliveryFields(order, dto);
 
         // Increment buyer total orders
         buyerTeam.setTotalOrders(buyerTeam.getTotalOrders() + 1);
         teamRepo.save(buyerTeam);
 
-        return toDTO(orderRepo.save(order));
+        InterGroupOrder saved = orderRepo.save(order);
+
+        // Notify seller team owner about new order
+        notifyUser(sellerTeam.getOwner(),
+                "Đơn hàng mới",
+                "Bạn có đơn hàng mới từ " + buyerTeam.getName() + ": " + order.getTitle(),
+                "ORDER_CREATED", null);
+
+        // Notify buyer (confirmation)
+        notifyUser(currentUser,
+                "Đã gửi đơn hàng",
+                "Đơn hàng \"" + order.getTitle() + "\" đã được gửi đến " + sellerTeam.getName() + ". Chờ phản hồi.",
+                "ORDER_CREATED", null);
+
+        return toDTO(saved);
     }
 
     public InterGroupOrderDTO acceptOrder(UUID orderId, User currentUser) {
@@ -91,6 +146,7 @@ public class InterGroupOrderService {
 
         // 1. Change Order Status
         order.setStatus("ACCEPTED");
+        order.setBuyerViewed(false);
 
         // 2. Automatically generate a Goal in the seller's Team
         Goal autoGoal = new Goal();
@@ -109,7 +165,18 @@ public class InterGroupOrderService {
         // 3. Link the goal to the order
         order.setLinkedGoalId(savedGoal.getId());
 
-        return toDTO(orderRepo.save(order));
+        InterGroupOrder saved = orderRepo.save(order);
+
+        // Notify buyer that order was accepted
+        User buyerToNotify = resolveBuyerUser(order);
+        if (buyerToNotify != null) {
+            notifyUser(buyerToNotify,
+                    "Đơn hàng được chấp nhận",
+                    "Đơn hàng \"" + order.getTitle() + "\" đã được " + sellerTeam.getName() + " chấp nhận và bắt đầu gia công.",
+                    "ORDER_ACCEPTED", null);
+        }
+
+        return toDTO(saved);
     }
 
     public InterGroupOrderDTO rejectOrder(UUID orderId, User currentUser) {
@@ -126,14 +193,32 @@ public class InterGroupOrderService {
         }
 
         order.setStatus("REJECTED");
-        return toDTO(orderRepo.save(order));
+        order.setBuyerViewed(false);
+        InterGroupOrder saved = orderRepo.save(order);
+
+        // Notify buyer that order was rejected
+        User buyerToNotify = resolveBuyerUser(order);
+        if (buyerToNotify != null) {
+            notifyUser(buyerToNotify,
+                    "Đơn hàng bị từ chối",
+                    "Đơn hàng \"" + order.getTitle() + "\" đã bị " + sellerTeam.getName() + " từ chối.",
+                    "ORDER_REJECTED", null);
+        }
+
+        return toDTO(saved);
     }
 
     private InterGroupOrderDTO toDTO(InterGroupOrder order) {
         InterGroupOrderDTO dto = new InterGroupOrderDTO();
         dto.setId(order.getId().toString());
-        dto.setBuyerTeamId(order.getBuyerTeam().getId().toString());
-        dto.setBuyerTeamName(order.getBuyerTeam().getName());
+        dto.setBuyerTeamId(order.getBuyerTeam() != null ? order.getBuyerTeam().getId().toString() : null);
+        dto.setBuyerTeamName(order.getBuyerTeam() != null ? order.getBuyerTeam().getName() : null);
+        dto.setBuyerUserId(order.getBuyerUser() != null ? order.getBuyerUser().getId().toString() : null);
+        dto.setBuyerUserName(order.getBuyerUser() != null
+                ? (order.getBuyerUser().getFullName() != null && !order.getBuyerUser().getFullName().isBlank()
+                        ? order.getBuyerUser().getFullName()
+                        : order.getBuyerUser().getUsername())
+                : null);
         dto.setSellerTeamId(order.getSellerTeam().getId().toString());
         dto.setSellerTeamName(order.getSellerTeam().getName());
         dto.setTitle(order.getTitle());
@@ -144,19 +229,31 @@ public class InterGroupOrderService {
         dto.setLinkedGoalId(order.getLinkedGoalId() != null ? order.getLinkedGoalId().toString() : null);
         dto.setCreatedAt(order.getCreatedAt());
         dto.setCancelledBy(order.getCancelledBy());
+        dto.setCancelRequested(order.getCancelRequested());
+        dto.setBuyerViewed(order.getBuyerViewed());
+        dto.setSellerViewed(order.getSellerViewed());
+
+        // Delivery profile
+        dto.setContactPhone(order.getContactPhone());
+        dto.setContactPhoneAlt(order.getContactPhoneAlt());
+        dto.setDeliveryAddress(order.getDeliveryAddress());
+        dto.setPreferredDeliveryFrom(order.getPreferredDeliveryFrom());
+        dto.setPreferredDeliveryTo(order.getPreferredDeliveryTo());
+        dto.setDeliveryFailureAction(order.getDeliveryFailureAction());
+        dto.setDeliveryNote(order.getDeliveryNote());
 
         // Buyer trust score
         Team buyer = order.getBuyerTeam();
-        int trustScore = buyer.getTotalOrders() > 0
+        int trustScore = buyer != null && buyer.getTotalOrders() > 0
                 ? (int) ((double) buyer.getCompletedOrders() / buyer.getTotalOrders() * 100)
-                : 100; // New team = 100% trust
+                : 100; // New team/personal buyer = 100% trust
         dto.setBuyerTrustScore(trustScore);
 
         return dto;
     }
 
     /**
-     * Hủy đơn hàng — chỉ Buyer Owner hoặc Seller Owner mới được hủy
+     * Khách hàng hoặc xưởng hủy đơn. Nếu người mua hủy đơn sau 24h, đơn sẽ chuyển sang trạng thái "Đang xin hủy".
      */
     @Transactional
     public InterGroupOrderDTO cancelOrder(UUID orderId, User currentUser) {
@@ -167,28 +264,141 @@ public class InterGroupOrderService {
             throw new RuntimeException("Chỉ đơn PENDING hoặc ACCEPTED mới được hủy.");
         }
 
-        boolean isBuyerOwner = order.getBuyerTeam().getOwner().getId().equals(currentUser.getId());
+        boolean isBuyerOwner = (order.getBuyerTeam() != null && order.getBuyerTeam().getOwner().getId().equals(currentUser.getId()))
+                || (order.getBuyerUser() != null && order.getBuyerUser().getId().equals(currentUser.getId()));
         boolean isSellerOwner = order.getSellerTeam().getOwner().getId().equals(currentUser.getId());
 
         if (!isBuyerOwner && !isSellerOwner) {
             throw new RuntimeException("Chỉ chủ xưởng mua hoặc bán mới được hủy đơn.");
         }
 
+        // Logic 24h: Nếu người mua hủy và đơn đã quá 24h -> Chuyển thành Yêu cầu hủy
+        if (isBuyerOwner && !isSellerOwner) {
+            long hoursSinceCreation = java.time.temporal.ChronoUnit.HOURS.between(order.getCreatedAt(), LocalDateTime.now());
+            if (hoursSinceCreation > 24) {
+                order.setCancelRequested(true);
+                order.setSellerViewed(false);
+                InterGroupOrder saved = orderRepo.save(order);
+                notifyUser(order.getSellerTeam().getOwner(),
+                        "Yêu cầu hủy đơn hàng",
+                        "Khách hàng đã yêu cầu hủy đơn \"" + order.getTitle() + "\". Hãy xem xét.",
+                        "ORDER_CANCEL_REQUESTED", null);
+                return toDTO(saved);
+            }
+        }
+
+        // Thực hiện hủy ngay
         order.setStatus("CANCELED");
         order.setCancelledBy(isBuyerOwner ? "BUYER" : "SELLER");
-
-        // Penalty: increment cancelled orders for the canceller's team
+        order.setCancelRequested(false);
         if (isBuyerOwner) {
+            order.setSellerViewed(false);
+        } else {
+            order.setBuyerViewed(false);
+        }
+
+        // Penalty
+        if (isBuyerOwner && order.getBuyerTeam() != null) {
             Team buyer = order.getBuyerTeam();
             buyer.setCancelledOrders(buyer.getCancelledOrders() + 1);
             teamRepo.save(buyer);
-        } else {
+        } else if (isSellerOwner) {
             Team seller = order.getSellerTeam();
             seller.setCancelledOrders(seller.getCancelledOrders() + 1);
             teamRepo.save(seller);
         }
 
-        return toDTO(orderRepo.save(order));
+        InterGroupOrder saved = orderRepo.save(order);
+
+        // Thông báo cho bên còn lại
+        String cancellerName = isBuyerOwner ? "Bên mua" : "Bên bán";
+        if (isBuyerOwner) {
+            notifyUser(order.getSellerTeam().getOwner(),
+                    "Đơn hàng đã bị hủy",
+                    "Đơn hàng \"" + order.getTitle() + "\" đã bị hủy bởi " + cancellerName + " (chưa quá 24h).",
+                    "ORDER_CANCELED", null);
+        } else {
+            User buyerToNotify = resolveBuyerUser(order);
+            if (buyerToNotify != null) {
+                notifyUser(buyerToNotify,
+                        "Đơn hàng đã bị hủy",
+                        "Đơn hàng \"" + order.getTitle() + "\" đã bị hủy bởi " + cancellerName + ".",
+                        "ORDER_CANCELED", null);
+            }
+        }
+
+        return toDTO(saved);
+    }
+
+    /**
+     * Seller đồng ý yêu cầu hủy của Buyer
+     */
+    @Transactional
+    public InterGroupOrderDTO approveCancelOrder(UUID orderId, User currentUser) {
+        InterGroupOrder order = orderRepo.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found"));
+
+        if (!order.getSellerTeam().getOwner().getId().equals(currentUser.getId())) {
+            throw new RuntimeException("Chỉ chủ xưởng bán mới có quyền duyệt hủy đơn.");
+        }
+        if (order.getCancelRequested() == null || !order.getCancelRequested()) {
+            throw new RuntimeException("Đơn hàng không có yêu cầu hủy.");
+        }
+
+        order.setStatus("CANCELED");
+        order.setCancelledBy("BUYER");
+        order.setCancelRequested(false);
+        order.setBuyerViewed(false);
+
+        // Penalty cho buyer
+        if (order.getBuyerTeam() != null) {
+            Team buyer = order.getBuyerTeam();
+            buyer.setCancelledOrders(buyer.getCancelledOrders() + 1);
+            teamRepo.save(buyer);
+        }
+
+        InterGroupOrder saved = orderRepo.save(order);
+
+        User buyerToNotify = resolveBuyerUser(order);
+        if (buyerToNotify != null) {
+            notifyUser(buyerToNotify,
+                    "Yêu cầu hủy được chấp nhận",
+                    "Xưởng " + order.getSellerTeam().getName() + " đã đồng ý hủy đơn \"" + order.getTitle() + "\".",
+                    "ORDER_CANCELED", null);
+        }
+
+        return toDTO(saved);
+    }
+
+    /**
+     * Seller từ chối yêu cầu hủy của Buyer (Chỉ hợp lệ nếu > 24h, mà code ở trên đã chặn việc tạo request nếu < 24h rồi)
+     */
+    @Transactional
+    public InterGroupOrderDTO rejectCancelOrder(UUID orderId, User currentUser) {
+        InterGroupOrder order = orderRepo.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found"));
+
+        if (!order.getSellerTeam().getOwner().getId().equals(currentUser.getId())) {
+            throw new RuntimeException("Chỉ chủ xưởng bán mới có quyền từ chối hủy đơn.");
+        }
+        if (order.getCancelRequested() == null || !order.getCancelRequested()) {
+            throw new RuntimeException("Đơn hàng không có yêu cầu hủy.");
+        }
+
+        // Tắt cờ yêu cầu hủy, đơn hàng trở lại bình thường
+        order.setCancelRequested(false);
+        order.setBuyerViewed(false);
+        InterGroupOrder saved = orderRepo.save(order);
+
+        User buyerToNotify = resolveBuyerUser(order);
+        if (buyerToNotify != null) {
+            notifyUser(buyerToNotify,
+                    "Yêu cầu hủy bị từ chối",
+                    "Xưởng " + order.getSellerTeam().getName() + " đã từ chối yêu cầu hủy đơn \"" + order.getTitle() + "\". Đơn hàng vẫn tiếp tục.",
+                    "ORDER_CANCEL_REJECTED", null);
+        }
+
+        return toDTO(saved);
     }
 
     /**
@@ -209,16 +419,78 @@ public class InterGroupOrderService {
         }
 
         order.setStatus("COMPLETED");
+        order.setBuyerViewed(false);
 
         // Trust: +1 completed for both buyer and seller
         Team buyer = order.getBuyerTeam();
-        buyer.setCompletedOrders(buyer.getCompletedOrders() + 1);
-        teamRepo.save(buyer);
+        if (buyer != null) {
+            buyer.setCompletedOrders(buyer.getCompletedOrders() + 1);
+            teamRepo.save(buyer);
+        }
 
         sellerTeam.setCompletedOrders(sellerTeam.getCompletedOrders() + 1);
         sellerTeam.setTotalOrders(sellerTeam.getTotalOrders() + 1);
         teamRepo.save(sellerTeam);
 
-        return toDTO(orderRepo.save(order));
+        InterGroupOrder saved = orderRepo.save(order);
+
+        // Notify buyer that order is completed
+        User buyerToNotify = resolveBuyerUser(order);
+        if (buyerToNotify != null) {
+            notifyUser(buyerToNotify,
+                    "Đơn hàng đã hoàn thành",
+                    "Đơn hàng \"" + order.getTitle() + "\" đã được " + sellerTeam.getName() + " hoàn thành.",
+                    "ORDER_COMPLETED", null);
+        }
+
+        return toDTO(saved);
+    }
+
+    @Transactional
+    public void markOrdersAsViewed(List<UUID> orderIds, String role) {
+        if (orderIds == null || orderIds.isEmpty()) return;
+        List<InterGroupOrder> orders = orderRepo.findAllById(orderIds);
+        for (InterGroupOrder order : orders) {
+            if ("BUYER".equalsIgnoreCase(role)) {
+                order.setBuyerViewed(true);
+            } else if ("SELLER".equalsIgnoreCase(role)) {
+                order.setSellerViewed(true);
+            }
+        }
+        orderRepo.saveAll(orders);
+    }
+
+    // === Helper methods ===
+
+    /** Map delivery fields from DTO to entity */
+    private void mapDeliveryFields(InterGroupOrder order, InterGroupOrderDTO dto) {
+        order.setContactPhone(dto.getContactPhone());
+        order.setContactPhoneAlt(dto.getContactPhoneAlt());
+        order.setDeliveryAddress(dto.getDeliveryAddress());
+        order.setPreferredDeliveryFrom(dto.getPreferredDeliveryFrom());
+        order.setPreferredDeliveryTo(dto.getPreferredDeliveryTo());
+        order.setDeliveryFailureAction(dto.getDeliveryFailureAction());
+        order.setDeliveryNote(dto.getDeliveryNote());
+    }
+
+    /** Resolve the buyer user: either buyerUser (personal) or buyerTeam owner */
+    private User resolveBuyerUser(InterGroupOrder order) {
+        if (order.getBuyerUser() != null) {
+            return order.getBuyerUser();
+        }
+        if (order.getBuyerTeam() != null) {
+            return order.getBuyerTeam().getOwner();
+        }
+        return null;
+    }
+
+    /** Send notification, silently ignore failures */
+    private void notifyUser(User user, String title, String message, String type, UUID taskId) {
+        try {
+            notificationService.createAndSend(user, title, message, type, taskId);
+        } catch (Exception e) {
+            // Don't let notification failures break order operations
+            System.err.println("Failed to send notification: " + e.getMessage());
+        }
     }
 }

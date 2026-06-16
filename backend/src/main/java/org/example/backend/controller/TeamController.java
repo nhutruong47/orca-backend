@@ -127,4 +127,17 @@ public class TeamController {
         teamService.unpublishTeam(id, auth.getName());
         return ResponseEntity.ok().build();
     }
+
+    /** Gá»­i há»“ sÆ¡ xÃ¡c minh xÆ°á»Ÿng cho Admin duyá»‡t */
+    @PutMapping("/{id}/verification")
+    public ResponseEntity<?> submitVerification(
+            @PathVariable UUID id,
+            @RequestBody TeamDTO dto,
+            Authentication auth) {
+        try {
+            return ResponseEntity.ok(teamService.submitVerification(id, dto, auth.getName()));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
 }

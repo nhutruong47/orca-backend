@@ -72,6 +72,13 @@ public class AdminController {
         return ResponseEntity.ok(adminService.updateTeamPublication(id, Boolean.TRUE.equals(body.get("published"))));
     }
 
+    @PatchMapping("/teams/{id}/verification")
+    public ResponseEntity<Map<String, Object>> updateTeamVerification(
+            @PathVariable UUID id,
+            @RequestBody Map<String, String> body) {
+        return ResponseEntity.ok(adminService.updateTeamVerification(id, body.get("status"), body.get("rejectReason")));
+    }
+
     @PatchMapping("/tasks/{id}/status")
     public ResponseEntity<Map<String, Object>> updateTaskStatus(
             @PathVariable UUID id,

@@ -24,6 +24,11 @@ public class InterGroupOrderController {
         return ResponseEntity.ok(orderService.getOutboundOrders(buyerTeamId));
     }
 
+    @GetMapping("/outbound-personal")
+    public ResponseEntity<List<InterGroupOrderDTO>> getMyOutboundOrders(@AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(orderService.getMyOutboundOrders(user));
+    }
+
     @GetMapping("/inbound/{sellerTeamId}")
     public ResponseEntity<List<InterGroupOrderDTO>> getInboundOrders(@PathVariable UUID sellerTeamId) {
         return ResponseEntity.ok(orderService.getInboundOrders(sellerTeamId));
@@ -65,11 +70,42 @@ public class InterGroupOrderController {
         }
     }
 
+    @PostMapping("/{orderId}/approve-cancel")
+    public ResponseEntity<?> approveCancelOrder(@PathVariable UUID orderId, @AuthenticationPrincipal User user) {
+        try {
+            return ResponseEntity.ok(orderService.approveCancelOrder(orderId, user));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/{orderId}/reject-cancel")
+    public ResponseEntity<?> rejectCancelOrder(@PathVariable UUID orderId, @AuthenticationPrincipal User user) {
+        try {
+            return ResponseEntity.ok(orderService.rejectCancelOrder(orderId, user));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @PostMapping("/{orderId}/complete")
     public ResponseEntity<?> completeOrder(@PathVariable UUID orderId, @AuthenticationPrincipal User user) {
         try {
             return ResponseEntity.ok(orderService.completeOrder(orderId, user));
         } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/mark-viewed")
+    public ResponseEntity<?> markViewed(@RequestBody Map<String, Object> payload) {
+        try {
+            List<String> orderIdsStr = (List<String>) payload.get("orderIds");
+            List<UUID> orderIds = orderIdsStr.stream().map(UUID::fromString).collect(java.util.stream.Collectors.toList());
+            String role = (String) payload.get("role");
+            orderService.markOrdersAsViewed(orderIds, role);
+            return ResponseEntity.ok(Map.of("message", "Success"));
+        } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
