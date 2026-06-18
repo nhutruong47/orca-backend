@@ -12,6 +12,8 @@ import java.util.List;
 import java.util.UUID;
 import org.example.backend.repository.TeamRepository;
 import org.example.backend.repository.InventoryRepository;
+import jakarta.persistence.EntityManager;
+import org.springframework.transaction.annotation.Transactional;
 import org.example.backend.entity.Team;
 import org.example.backend.entity.User;
 import org.example.backend.entity.Role;
@@ -25,6 +27,7 @@ public class DebugController {
     private final TeamRepository teamRepository;
     private final InventoryRepository inventoryRepository;
     private final PasswordEncoder passwordEncoder;
+    private final EntityManager entityManager;
     private final String adminUsername;
     private final String adminPassword;
 
@@ -33,12 +36,14 @@ public class DebugController {
             TeamRepository teamRepository,
             InventoryRepository inventoryRepository,
             PasswordEncoder passwordEncoder,
+            EntityManager entityManager,
             @Value("${app.default-admin.username:admin}") String adminUsername,
             @Value("${app.default-admin.password:Admin@123}") String adminPassword) {
         this.userRepository = userRepository;
         this.teamRepository = teamRepository;
         this.inventoryRepository = inventoryRepository;
         this.passwordEncoder = passwordEncoder;
+        this.entityManager = entityManager;
         this.adminUsername = adminUsername;
         this.adminPassword = adminPassword;
     }
@@ -63,7 +68,14 @@ public class DebugController {
     }
 
     @GetMapping("/seed-factories")
+    @Transactional
     public Map<String, Object> seedFactories() {
+        try {
+            entityManager.createNativeQuery("ALTER TABLE inventory_items ALTER COLUMN name DROP NOT NULL").executeUpdate();
+        } catch (Exception e) {
+            System.out.println("No need to alter name column: " + e.getMessage());
+        }
+        
         // Find or create a dummy owner
         User owner = userRepository.findByUsername("admin").orElseGet(() -> {
             User u = new User();
