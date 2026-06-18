@@ -69,11 +69,11 @@ public class DebugController {
         });
 
         List<Team> factories = List.of(
-                createMockTeam("Xưởng Rang Đắk Lắk", "Đắk Lắk, Tây Nguyên", "Xưởng rang quy mô lớn, công nghệ hot-air hiện đại", 95, 4.8, 35, 100, 20, owner.getId()),
-                createMockTeam("Xưởng Rang Gia Lai", "Gia Lai, Tây Nguyên", "Chuyên gia công Arabica chất lượng cao", 92, 4.9, 27, 85, 12, owner.getId()),
-                createMockTeam("Cà Phê Mộc Sơn", "Lâm Đồng", "Xưởng rang truyền thống, chuyên cà phê mộc nguyên chất", 88, 4.5, 40, 150, 6, owner.getId()),
-                createMockTeam("Xưởng Rang Quận 9", "Hồ Chí Minh", "Chuyên cung cấp cho chuỗi quán cafe hiện đại", 98, 5.0, 50, 200, 4, owner.getId()),
-                createMockTeam("Cầu Đất Roaster", "Lâm Đồng", "Cà phê đặc sản Cầu Đất, rang mộc thủ công", 90, 4.7, 22, 60, 8, owner.getId())
+                createMockTeam("Xưởng Rang Đắk Lắk", "Đắk Lắk, Tây Nguyên", "Xưởng rang quy mô lớn, công nghệ hot-air hiện đại", 95, 4.8, 35, 100.0, 20, owner),
+                createMockTeam("Xưởng Rang Gia Lai", "Gia Lai, Tây Nguyên", "Chuyên gia công Arabica chất lượng cao", 92, 4.9, 27, 85.0, 12, owner),
+                createMockTeam("Cà Phê Mộc Sơn", "Lâm Đồng", "Xưởng rang truyền thống, chuyên cà phê mộc nguyên chất", 88, 4.5, 40, 150.0, 6, owner),
+                createMockTeam("Xưởng Rang Quận 9", "Hồ Chí Minh", "Chuyên cung cấp cho chuỗi quán cafe hiện đại", 98, 5.0, 50, 200.0, 4, owner),
+                createMockTeam("Cầu Đất Roaster", "Lâm Đồng", "Cà phê đặc sản Cầu Đất, rang mộc thủ công", 90, 4.7, 22, 60.0, 8, owner)
         );
 
         teamRepository.saveAll(factories);
@@ -81,7 +81,7 @@ public class DebugController {
         return Map.of("message", "Đã tạo " + factories.size() + " xưởng mẫu thành công!");
     }
 
-    private Team createMockTeam(String name, String region, String specialty, int score, double rating, int orders, int capacity, int delivery, UUID ownerId) {
+    private Team createMockTeam(String name, String region, String specialty, int score, double rating, int orders, double capacity, int delivery, User owner) {
         Team t = new Team();
         t.setName(name);
         t.setDescription("Đây là xưởng mẫu được tạo tự động.");
@@ -92,7 +92,7 @@ public class DebugController {
         t.setFactoryType("Xưởng rang & đóng gói");
         t.setInviteCode("SEED" + Math.round(Math.random() * 1000));
         t.setPublished(true);
-        t.setOwnerId(ownerId);
+        t.setOwner(owner);
         
         t.setCompletedOrders(orders);
         t.setOnTimeOrders(orders - 2);
