@@ -62,7 +62,13 @@ public class ReviewController {
             int rating = ((Number) payload.get("rating")).intValue();
             String comment = (String) payload.getOrDefault("comment", "");
             String deliveryResult = (String) payload.get("deliveryResult");
-            return ResponseEntity.ok(reviewService.updateReview(reviewId, rating, comment, deliveryResult, user));
+            Integer qualityScore = payload.containsKey("qualityScore") ? ((Number) payload.get("qualityScore")).intValue() : null;
+            Integer timeScore = payload.containsKey("timeScore") ? ((Number) payload.get("timeScore")).intValue() : null;
+            Integer communicationScore = payload.containsKey("communicationScore") ? ((Number) payload.get("communicationScore")).intValue() : null;
+            Integer supportScore = payload.containsKey("supportScore") ? ((Number) payload.get("supportScore")).intValue() : null;
+            String replyText = (String) payload.get("replyText");
+
+            return ResponseEntity.ok(reviewService.updateReview(reviewId, rating, comment, deliveryResult, qualityScore, timeScore, communicationScore, supportScore, replyText, user));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
