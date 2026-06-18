@@ -116,7 +116,6 @@ public class DebugController {
         t.setCapacityValue(capacity);
         t.setCapacityUnit("kg");
         t.setFactoryType("Xưởng rang & đóng gói");
-        t.setInviteCode("SEED" + Math.round(Math.random() * 1000));
         t.setPublished(true);
         t.setOwner(owner);
         
