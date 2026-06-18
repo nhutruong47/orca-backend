@@ -11,9 +11,11 @@ import java.util.Map;
 import java.util.List;
 import java.util.UUID;
 import org.example.backend.repository.TeamRepository;
+import org.example.backend.repository.InventoryRepository;
 import org.example.backend.entity.Team;
 import org.example.backend.entity.User;
 import org.example.backend.entity.Role;
+import org.example.backend.entity.InventoryItem;
 
 @RestController
 @RequestMapping("/api/debug")
@@ -21,6 +23,7 @@ public class DebugController {
 
     private final UserRepository userRepository;
     private final TeamRepository teamRepository;
+    private final InventoryRepository inventoryRepository;
     private final PasswordEncoder passwordEncoder;
     private final String adminUsername;
     private final String adminPassword;
@@ -28,11 +31,13 @@ public class DebugController {
     public DebugController(
             UserRepository userRepository,
             TeamRepository teamRepository,
+            InventoryRepository inventoryRepository,
             PasswordEncoder passwordEncoder,
             @Value("${app.default-admin.username:admin}") String adminUsername,
             @Value("${app.default-admin.password:Admin@123}") String adminPassword) {
         this.userRepository = userRepository;
         this.teamRepository = teamRepository;
+        this.inventoryRepository = inventoryRepository;
         this.passwordEncoder = passwordEncoder;
         this.adminUsername = adminUsername;
         this.adminPassword = adminPassword;
@@ -78,7 +83,28 @@ public class DebugController {
 
         teamRepository.saveAll(factories);
 
-        return Map.of("message", "Đã tạo " + factories.size() + " xưởng mẫu thành công!");
+        List<InventoryItem> products = new java.util.ArrayList<>();
+        for (Team f : factories) {
+            products.add(createMockProduct(f, "Arabica Cầu Đất", "ROASTED", 500.0, "kg"));
+            products.add(createMockProduct(f, "Robusta Honey", "GREEN", 1000.0, "kg"));
+            products.add(createMockProduct(f, "Espresso Blend", "PACKAGED", 200.0, "kg"));
+            products.add(createMockProduct(f, "Culi Đặc Biệt", "ROASTED", 150.0, "kg"));
+            products.add(createMockProduct(f, "Arabica Blend", "GROUND", 300.0, "kg"));
+        }
+        inventoryRepository.saveAll(products);
+
+        return Map.of("message", "Đã tạo " + factories.size() + " xưởng và " + products.size() + " sản phẩm thành công!");
+    }
+
+    private InventoryItem createMockProduct(Team team, String type, String state, Double quantity, String unit) {
+        InventoryItem item = new InventoryItem();
+        item.setTeam(team);
+        item.setProductType(type);
+        item.setProductState(state);
+        item.setQuantity(quantity);
+        item.setUnit(unit);
+        item.setLowStockThreshold(50.0);
+        return item;
     }
 
     private Team createMockTeam(String name, String region, String specialty, int score, double rating, int orders, double capacity, int delivery, User owner) {
