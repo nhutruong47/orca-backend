@@ -19,14 +19,14 @@ public class InventoryItem {
     private Team team;
 
     /** ARABICA, ROBUSTA, CULI, BLEND or custom name */
-    @Column(name = "product_type", nullable = false, length = 100)
+    @Column(name = "product_type", length = 100)
     private String productType;
 
     /** GREEN (hạt xanh), ROASTED (đã rang), GROUND (đã xay), PACKAGED (đã đóng gói) */
-    @Column(name = "product_state", nullable = false, length = 30)
+    @Column(name = "product_state", length = 30)
     private String productState = "GREEN";
 
-    @Column(nullable = false)
+    @Column
     private Double quantity = 0.0;
 
     @Column(length = 50)
