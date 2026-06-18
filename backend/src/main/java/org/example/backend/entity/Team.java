@@ -88,7 +88,7 @@ public class Team {
     @Column(name = "total_ratings", nullable = false, columnDefinition = "integer default 0")
     private int totalRatings = 0;
 
-    @Column(name = "sum_ratings", nullable = false, columnDefinition = "double default 0.0")
+    @Column(name = "sum_ratings", nullable = false, columnDefinition = "double precision default 0.0")
     private double sumRatings = 0.0;
 
     @Column(name = "invite_code", unique = true, length = 6)
