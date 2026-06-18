@@ -44,7 +44,10 @@ public class ReviewService {
     }
 
     @Transactional
-    public ReviewDTO updateReview(UUID reviewId, int rating, String comment, String deliveryResult, User currentUser) {
+    public ReviewDTO updateReview(UUID reviewId, int rating, String comment, String deliveryResult,
+                                   Integer productQuality, Integer deliverySchedule,
+                                   Integer customerSupport, Integer overallRating,
+                                   String images, User currentUser) {
         Review review = reviewRepo.findById(reviewId)
                 .orElseThrow(() -> new RuntimeException("Review not found"));
         validateReviewOwner(review, currentUser);
@@ -56,6 +59,11 @@ public class ReviewService {
         review.setRating(rating);
         review.setComment(comment);
         review.setDeliveryResult(deliveryResult);
+        review.setProductQuality(productQuality);
+        review.setDeliverySchedule(deliverySchedule);
+        review.setCustomerSupport(customerSupport);
+        review.setOverallRating(overallRating);
+        review.setImages(images);
         if (review.getOrder() != null) {
             review.getOrder().setDeliveryStatus(deliveryResult);
         }
@@ -129,7 +137,12 @@ public class ReviewService {
         dto.setBuyerUserId(r.getBuyerUser() != null ? r.getBuyerUser().getId().toString() : null);
         dto.setSellerTeamId(r.getSellerTeam().getId().toString());
         dto.setRating(r.getRating());
+        dto.setProductQuality(r.getProductQuality());
+        dto.setDeliverySchedule(r.getDeliverySchedule());
+        dto.setCustomerSupport(r.getCustomerSupport());
+        dto.setOverallRating(r.getOverallRating());
         dto.setComment(r.getComment());
+        dto.setImages(r.getImages());
         dto.setDeliveryResult(r.getDeliveryResult());
         dto.setCreatedAt(r.getCreatedAt());
         if (r.getBuyerTeam() != null) dto.setBuyerTeamName(r.getBuyerTeam().getName());

@@ -39,6 +39,15 @@ public class InterGroupOrderDTO {
     private String deliveryStatus; // ON_TIME, LATE, NOT_DELIVERED
     private LocalDateTime deliveryConfirmedAt;
 
+    // === Marketplace RFQ Fields ===
+    private String materialSource; // CUSTOMER_PROVIDED, FACTORY_PROVIDED, COMBINED
+    private String services; // comma-separated: ROASTING, PACKAGING, QC, etc.
+    private String productType; // ARABICA, ROBUSTA, CULI, BLEND
+    private Double quotedPrice;
+    private String quotedNote;
+    private LocalDateTime quotedAt;
+    private String unit;
+
     public InterGroupOrderDTO() {
     }
 
@@ -275,4 +284,27 @@ public class InterGroupOrderDTO {
     public void setDeliveryConfirmedAt(LocalDateTime deliveryConfirmedAt) {
         this.deliveryConfirmedAt = deliveryConfirmedAt;
     }
+
+    // === Marketplace RFQ Getters & Setters ===
+
+    public String getMaterialSource() { return materialSource; }
+    public void setMaterialSource(String materialSource) { this.materialSource = materialSource; }
+
+    public String getServices() { return services; }
+    public void setServices(String services) { this.services = services; }
+
+    public String getProductType() { return productType; }
+    public void setProductType(String productType) { this.productType = productType; }
+
+    public Double getQuotedPrice() { return quotedPrice; }
+    public void setQuotedPrice(Double quotedPrice) { this.quotedPrice = quotedPrice; }
+
+    public String getQuotedNote() { return quotedNote; }
+    public void setQuotedNote(String quotedNote) { this.quotedNote = quotedNote; }
+
+    public LocalDateTime getQuotedAt() { return quotedAt; }
+    public void setQuotedAt(LocalDateTime quotedAt) { this.quotedAt = quotedAt; }
+
+    public String getUnit() { return unit; }
+    public void setUnit(String unit) { this.unit = unit; }
 }

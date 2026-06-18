@@ -5,7 +5,8 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "inventory_items")
+@Table(name = "inventory_items",
+       uniqueConstraints = @UniqueConstraint(columnNames = {"team_id", "product_type", "product_state"}))
 public class InventoryItem {
 
     @Id
@@ -17,17 +18,22 @@ public class InventoryItem {
     @JoinColumn(name = "team_id", nullable = false)
     private Team team;
 
-    @Column(nullable = false, length = 200)
-    private String name;
+    /** ARABICA, ROBUSTA, CULI, BLEND or custom name */
+    @Column(name = "product_type", nullable = false, length = 100)
+    private String productType;
+
+    /** GREEN (hạt xanh), ROASTED (đã rang), GROUND (đã xay), PACKAGED (đã đóng gói) */
+    @Column(name = "product_state", nullable = false, length = 30)
+    private String productState = "GREEN";
 
     @Column(nullable = false)
     private Double quantity = 0.0;
 
     @Column(length = 50)
-    private String unit; // e.g. "kg", "cái", "hộp"
+    private String unit = "kg";
 
     @Column(name = "low_stock_threshold")
-    private Double lowStockThreshold = 10.0;
+    private Double lowStockThreshold = 100.0;
 
     @Column(name = "last_updated", nullable = false)
     private LocalDateTime lastUpdated;
@@ -45,59 +51,45 @@ public class InventoryItem {
         return "IN_STOCK";
     }
 
-    public UUID getId() {
-        return id;
+    /** Convenience: human-readable name combining type + state */
+    public String getDisplayName() {
+        String stateVi = switch (productState) {
+            case "GREEN" -> "Hạt xanh";
+            case "ROASTED" -> "Đã rang";
+            case "GROUND" -> "Đã xay";
+            case "PACKAGED" -> "Đã đóng gói";
+            default -> productState;
+        };
+        return productType + " - " + stateVi;
     }
 
-    public void setId(UUID id) {
-        this.id = id;
-    }
+    public UUID getId() { return id; }
+    public void setId(UUID id) { this.id = id; }
 
-    public Team getTeam() {
-        return team;
-    }
+    public Team getTeam() { return team; }
+    public void setTeam(Team team) { this.team = team; }
 
-    public void setTeam(Team team) {
-        this.team = team;
-    }
+    public String getProductType() { return productType; }
+    public void setProductType(String productType) { this.productType = productType; }
 
+    public String getProductState() { return productState; }
+    public void setProductState(String productState) { this.productState = productState; }
+
+    public Double getQuantity() { return quantity; }
+    public void setQuantity(Double quantity) { this.quantity = quantity; }
+
+    public String getUnit() { return unit; }
+    public void setUnit(String unit) { this.unit = unit; }
+
+    public Double getLowStockThreshold() { return lowStockThreshold; }
+    public void setLowStockThreshold(Double lowStockThreshold) { this.lowStockThreshold = lowStockThreshold; }
+
+    public LocalDateTime getLastUpdated() { return lastUpdated; }
+    public void setLastUpdated(LocalDateTime lastUpdated) { this.lastUpdated = lastUpdated; }
+
+    /** @deprecated Use productType instead */
+    @Transient
     public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public Double getQuantity() {
-        return quantity;
-    }
-
-    public void setQuantity(Double quantity) {
-        this.quantity = quantity;
-    }
-
-    public String getUnit() {
-        return unit;
-    }
-
-    public void setUnit(String unit) {
-        this.unit = unit;
-    }
-
-    public Double getLowStockThreshold() {
-        return lowStockThreshold;
-    }
-
-    public void setLowStockThreshold(Double lowStockThreshold) {
-        this.lowStockThreshold = lowStockThreshold;
-    }
-
-    public LocalDateTime getLastUpdated() {
-        return lastUpdated;
-    }
-
-    public void setLastUpdated(LocalDateTime lastUpdated) {
-        this.lastUpdated = lastUpdated;
+        return getDisplayName();
     }
 }

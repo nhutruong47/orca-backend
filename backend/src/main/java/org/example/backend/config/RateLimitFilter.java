@@ -18,7 +18,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Order(Ordered.HIGHEST_PRECEDENCE + 10)
 public class RateLimitFilter implements jakarta.servlet.Filter {
 
-    private static final int MAX_REQUESTS_PER_MINUTE = 120;
+    private static final int MAX_REQUESTS_PER_MINUTE = 600;
     private static final int WINDOW_SECONDS = 60;
 
     private static class ClientBucket {

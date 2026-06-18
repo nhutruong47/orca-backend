@@ -4,6 +4,11 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+/**
+ * Marketplace order (RFQ flow).
+ * Status flow: RFQ_CREATED → QUOTED → CONFIRMED → IN_PRODUCTION → QC → COMPLETED → SHIPPING → DELIVERED → REVIEWED
+ * Legacy statuses (PENDING, ACCEPTED, REJECTED, CANCELED) are still supported for backward compat.
+ */
 @Entity
 @Table(name = "inter_group_orders")
 public class InterGroupOrder {
@@ -36,8 +41,13 @@ public class InterGroupOrder {
 
     private LocalDateTime deadline;
 
+    /**
+     * New marketplace status flow:
+     * RFQ_CREATED, QUOTED, CONFIRMED, IN_PRODUCTION, QC, COMPLETED, SHIPPING, DELIVERED, REVIEWED
+     * Legacy: PENDING (=RFQ_CREATED), ACCEPTED (=CONFIRMED), REJECTED, CANCELED
+     */
     @Column(nullable = false)
-    private String status = "PENDING"; // PENDING, ACCEPTED, REJECTED, DELIVERED, CANCELED
+    private String status = "RFQ_CREATED";
 
     @Column(name = "linked_goal_id")
     private UUID linkedGoalId;
@@ -46,7 +56,35 @@ public class InterGroupOrder {
     private LocalDateTime createdAt;
 
     @Column(name = "cancelled_by")
-    private String cancelledBy; // "BUYER" or "SELLER"
+    private String cancelledBy;
+
+    // === Nguồn nguyên liệu ===
+    /** CUSTOMER_PROVIDED, FACTORY_PROVIDED, COMBINED */
+    @Column(name = "material_source", length = 30)
+    private String materialSource;
+
+    // === Dịch vụ yêu cầu (comma-separated) ===
+    /** e.g. "ROASTING,PACKAGING,QC" or "FULL_SERVICE" */
+    @Column(name = "services", length = 500)
+    private String services;
+
+    // === Loại cà phê ===
+    @Column(name = "product_type", length = 100)
+    private String productType;
+
+    // === Báo giá ===
+    @Column(name = "quoted_price")
+    private Double quotedPrice;
+
+    @Column(name = "quoted_note", columnDefinition = "TEXT")
+    private String quotedNote;
+
+    @Column(name = "quoted_at")
+    private LocalDateTime quotedAt;
+
+    // === Unit ===
+    @Column(length = 20)
+    private String unit = "kg";
 
     // === Delivery Profile ===
     @Column(name = "contact_phone", length = 20)
@@ -64,7 +102,6 @@ public class InterGroupOrder {
     @Column(name = "preferred_delivery_to")
     private LocalDateTime preferredDeliveryTo;
 
-    /** RETRY_LATER, LEAVE_AT_DOOR, RETURN_TO_SENDER, CONTACT_ALTERNATIVE */
     @Column(name = "delivery_failure_action", length = 30)
     private String deliveryFailureAction;
 
@@ -80,15 +117,12 @@ public class InterGroupOrder {
     @Column(name = "seller_viewed")
     private Boolean sellerViewed = false;
 
-    /** ON_TIME, LATE, NOT_DELIVERED — set by buyer when confirming receipt */
     @Column(name = "delivery_status", length = 20)
     private String deliveryStatus;
 
-    /** When buyer confirmed delivery */
     @Column(name = "delivery_confirmed_at")
     private LocalDateTime deliveryConfirmedAt;
 
-    /** Whether buyer has confirmed receipt */
     @Column(name = "delivery_confirmed")
     private Boolean deliveryConfirmed = false;
 
@@ -97,206 +131,102 @@ public class InterGroupOrder {
         this.createdAt = LocalDateTime.now();
     }
 
-    public InterGroupOrder() {
-    }
+    public InterGroupOrder() {}
 
-    // Getters and Setters
+    // ====== Getters and Setters ======
 
-    public UUID getId() {
-        return id;
-    }
+    public UUID getId() { return id; }
+    public void setId(UUID id) { this.id = id; }
 
-    public void setId(UUID id) {
-        this.id = id;
-    }
+    public Team getBuyerTeam() { return buyerTeam; }
+    public void setBuyerTeam(Team buyerTeam) { this.buyerTeam = buyerTeam; }
 
-    public Team getBuyerTeam() {
-        return buyerTeam;
-    }
+    public User getBuyerUser() { return buyerUser; }
+    public void setBuyerUser(User buyerUser) { this.buyerUser = buyerUser; }
 
-    public void setBuyerTeam(Team buyerTeam) {
-        this.buyerTeam = buyerTeam;
-    }
+    public Team getSellerTeam() { return sellerTeam; }
+    public void setSellerTeam(Team sellerTeam) { this.sellerTeam = sellerTeam; }
 
-    public User getBuyerUser() {
-        return buyerUser;
-    }
+    public String getTitle() { return title; }
+    public void setTitle(String title) { this.title = title; }
 
-    public void setBuyerUser(User buyerUser) {
-        this.buyerUser = buyerUser;
-    }
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
 
-    public Team getSellerTeam() {
-        return sellerTeam;
-    }
+    public Integer getQuantity() { return quantity; }
+    public void setQuantity(Integer quantity) { this.quantity = quantity; }
 
-    public void setSellerTeam(Team sellerTeam) {
-        this.sellerTeam = sellerTeam;
-    }
+    public LocalDateTime getDeadline() { return deadline; }
+    public void setDeadline(LocalDateTime deadline) { this.deadline = deadline; }
 
-    public String getTitle() {
-        return title;
-    }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
 
-    public void setTitle(String title) {
-        this.title = title;
-    }
+    public UUID getLinkedGoalId() { return linkedGoalId; }
+    public void setLinkedGoalId(UUID linkedGoalId) { this.linkedGoalId = linkedGoalId; }
 
-    public String getDescription() {
-        return description;
-    }
+    public LocalDateTime getCreatedAt() { return createdAt; }
 
-    public void setDescription(String description) {
-        this.description = description;
-    }
+    public String getCancelledBy() { return cancelledBy; }
+    public void setCancelledBy(String cancelledBy) { this.cancelledBy = cancelledBy; }
 
-    public Integer getQuantity() {
-        return quantity;
-    }
+    public String getMaterialSource() { return materialSource; }
+    public void setMaterialSource(String materialSource) { this.materialSource = materialSource; }
 
-    public void setQuantity(Integer quantity) {
-        this.quantity = quantity;
-    }
+    public String getServices() { return services; }
+    public void setServices(String services) { this.services = services; }
 
-    public LocalDateTime getDeadline() {
-        return deadline;
-    }
+    public String getProductType() { return productType; }
+    public void setProductType(String productType) { this.productType = productType; }
 
-    public void setDeadline(LocalDateTime deadline) {
-        this.deadline = deadline;
-    }
+    public Double getQuotedPrice() { return quotedPrice; }
+    public void setQuotedPrice(Double quotedPrice) { this.quotedPrice = quotedPrice; }
 
-    public String getStatus() {
-        return status;
-    }
+    public String getQuotedNote() { return quotedNote; }
+    public void setQuotedNote(String quotedNote) { this.quotedNote = quotedNote; }
 
-    public void setStatus(String status) {
-        this.status = status;
-    }
+    public LocalDateTime getQuotedAt() { return quotedAt; }
+    public void setQuotedAt(LocalDateTime quotedAt) { this.quotedAt = quotedAt; }
 
-    public UUID getLinkedGoalId() {
-        return linkedGoalId;
-    }
+    public String getUnit() { return unit; }
+    public void setUnit(String unit) { this.unit = unit; }
 
-    public void setLinkedGoalId(UUID linkedGoalId) {
-        this.linkedGoalId = linkedGoalId;
-    }
+    public String getContactPhone() { return contactPhone; }
+    public void setContactPhone(String contactPhone) { this.contactPhone = contactPhone; }
 
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
+    public String getContactPhoneAlt() { return contactPhoneAlt; }
+    public void setContactPhoneAlt(String contactPhoneAlt) { this.contactPhoneAlt = contactPhoneAlt; }
 
-    public String getCancelledBy() {
-        return cancelledBy;
-    }
+    public String getDeliveryAddress() { return deliveryAddress; }
+    public void setDeliveryAddress(String deliveryAddress) { this.deliveryAddress = deliveryAddress; }
 
-    public void setCancelledBy(String cancelledBy) {
-        this.cancelledBy = cancelledBy;
-    }
+    public LocalDateTime getPreferredDeliveryFrom() { return preferredDeliveryFrom; }
+    public void setPreferredDeliveryFrom(LocalDateTime preferredDeliveryFrom) { this.preferredDeliveryFrom = preferredDeliveryFrom; }
 
-    // === Delivery Profile Getters & Setters ===
+    public LocalDateTime getPreferredDeliveryTo() { return preferredDeliveryTo; }
+    public void setPreferredDeliveryTo(LocalDateTime preferredDeliveryTo) { this.preferredDeliveryTo = preferredDeliveryTo; }
 
-    public String getContactPhone() {
-        return contactPhone;
-    }
+    public String getDeliveryFailureAction() { return deliveryFailureAction; }
+    public void setDeliveryFailureAction(String deliveryFailureAction) { this.deliveryFailureAction = deliveryFailureAction; }
 
-    public void setContactPhone(String contactPhone) {
-        this.contactPhone = contactPhone;
-    }
+    public String getDeliveryNote() { return deliveryNote; }
+    public void setDeliveryNote(String deliveryNote) { this.deliveryNote = deliveryNote; }
 
-    public String getContactPhoneAlt() {
-        return contactPhoneAlt;
-    }
+    public Boolean getCancelRequested() { return cancelRequested; }
+    public void setCancelRequested(Boolean cancelRequested) { this.cancelRequested = cancelRequested; }
 
-    public void setContactPhoneAlt(String contactPhoneAlt) {
-        this.contactPhoneAlt = contactPhoneAlt;
-    }
+    public Boolean getBuyerViewed() { return buyerViewed; }
+    public void setBuyerViewed(Boolean buyerViewed) { this.buyerViewed = buyerViewed; }
 
-    public String getDeliveryAddress() {
-        return deliveryAddress;
-    }
+    public Boolean getSellerViewed() { return sellerViewed; }
+    public void setSellerViewed(Boolean sellerViewed) { this.sellerViewed = sellerViewed; }
 
-    public void setDeliveryAddress(String deliveryAddress) {
-        this.deliveryAddress = deliveryAddress;
-    }
+    public String getDeliveryStatus() { return deliveryStatus; }
+    public void setDeliveryStatus(String deliveryStatus) { this.deliveryStatus = deliveryStatus; }
 
-    public LocalDateTime getPreferredDeliveryFrom() {
-        return preferredDeliveryFrom;
-    }
+    public LocalDateTime getDeliveryConfirmedAt() { return deliveryConfirmedAt; }
+    public void setDeliveryConfirmedAt(LocalDateTime deliveryConfirmedAt) { this.deliveryConfirmedAt = deliveryConfirmedAt; }
 
-    public void setPreferredDeliveryFrom(LocalDateTime preferredDeliveryFrom) {
-        this.preferredDeliveryFrom = preferredDeliveryFrom;
-    }
-
-    public LocalDateTime getPreferredDeliveryTo() {
-        return preferredDeliveryTo;
-    }
-
-    public void setPreferredDeliveryTo(LocalDateTime preferredDeliveryTo) {
-        this.preferredDeliveryTo = preferredDeliveryTo;
-    }
-
-    public String getDeliveryFailureAction() {
-        return deliveryFailureAction;
-    }
-
-    public void setDeliveryFailureAction(String deliveryFailureAction) {
-        this.deliveryFailureAction = deliveryFailureAction;
-    }
-
-    public String getDeliveryNote() {
-        return deliveryNote;
-    }
-
-    public void setDeliveryNote(String deliveryNote) {
-        this.deliveryNote = deliveryNote;
-    }
-
-    public Boolean getCancelRequested() {
-        return cancelRequested;
-    }
-
-    public void setCancelRequested(Boolean cancelRequested) {
-        this.cancelRequested = cancelRequested;
-    }
-
-    public Boolean getBuyerViewed() {
-        return buyerViewed;
-    }
-
-    public void setBuyerViewed(Boolean buyerViewed) {
-        this.buyerViewed = buyerViewed;
-    }
-
-    public Boolean getSellerViewed() {
-        return sellerViewed;
-    }
-
-    public void setSellerViewed(Boolean sellerViewed) {
-        this.sellerViewed = sellerViewed;
-    }
-
-    public String getDeliveryStatus() {
-        return deliveryStatus;
-    }
-
-    public void setDeliveryStatus(String deliveryStatus) {
-        this.deliveryStatus = deliveryStatus;
-    }
-
-    public LocalDateTime getDeliveryConfirmedAt() {
-        return deliveryConfirmedAt;
-    }
-
-    public void setDeliveryConfirmedAt(LocalDateTime deliveryConfirmedAt) {
-        this.deliveryConfirmedAt = deliveryConfirmedAt;
-    }
-
-    public Boolean getDeliveryConfirmed() {
-        return deliveryConfirmed;
-    }
-
-    public void setDeliveryConfirmed(Boolean deliveryConfirmed) {
-        this.deliveryConfirmed = deliveryConfirmed;
-    }
+    public Boolean getDeliveryConfirmed() { return deliveryConfirmed; }
+    public void setDeliveryConfirmed(Boolean deliveryConfirmed) { this.deliveryConfirmed = deliveryConfirmed; }
 }

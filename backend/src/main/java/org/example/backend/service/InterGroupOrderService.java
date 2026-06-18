@@ -25,15 +25,17 @@ public class InterGroupOrderService {
     private final GoalRepository goalRepo;
     private final NotificationService notificationService;
     private final ReviewRepository reviewRepo;
+    private final InventoryService inventoryService;
 
     public InterGroupOrderService(InterGroupOrderRepository orderRepo, TeamRepository teamRepo,
             GoalRepository goalRepo, NotificationService notificationService,
-            ReviewRepository reviewRepo) {
+            ReviewRepository reviewRepo, InventoryService inventoryService) {
         this.orderRepo = orderRepo;
         this.teamRepo = teamRepo;
         this.goalRepo = goalRepo;
         this.notificationService = notificationService;
         this.reviewRepo = reviewRepo;
+        this.inventoryService = inventoryService;
     }
 
     public List<InterGroupOrderDTO> getOutboundOrders(UUID buyerTeamId) {
@@ -64,7 +66,11 @@ public class InterGroupOrderService {
             order.setDescription(dto.getDescription());
             order.setQuantity(dto.getQuantity());
             order.setDeadline(dto.getDeadline());
-            order.setStatus("PENDING");
+            order.setStatus("RFQ_CREATED");
+            order.setMaterialSource(dto.getMaterialSource());
+            order.setServices(dto.getServices());
+            order.setProductType(dto.getProductType());
+            order.setUnit(dto.getUnit());
             mapDeliveryFields(order, dto);
 
             InterGroupOrder saved = orderRepo.save(order);
@@ -111,7 +117,11 @@ public class InterGroupOrderService {
         order.setDescription(dto.getDescription());
         order.setQuantity(dto.getQuantity());
         order.setDeadline(dto.getDeadline());
-        order.setStatus("PENDING");
+        order.setStatus("RFQ_CREATED");
+        order.setMaterialSource(dto.getMaterialSource());
+        order.setServices(dto.getServices());
+        order.setProductType(dto.getProductType());
+        order.setUnit(dto.getUnit());
         mapDeliveryFields(order, dto);
 
         // Increment buyer total orders
@@ -144,12 +154,12 @@ public class InterGroupOrderService {
             throw new RuntimeException("Only the receiving team owner can accept orders.");
         }
 
-        if (!"PENDING".equals(order.getStatus())) {
-            throw new RuntimeException("Order is not in PENDING state.");
+        if (!"RFQ_CREATED".equals(order.getStatus()) && !"QUOTED".equals(order.getStatus()) && !"PENDING".equals(order.getStatus())) {
+            throw new RuntimeException("Đơn hàng không ở trạng thái có thể xác nhận.");
         }
 
         // 1. Change Order Status
-        order.setStatus("ACCEPTED");
+        order.setStatus("CONFIRMED");
         order.setBuyerViewed(false);
 
         // 2. Automatically generate a Goal in the seller's Team
@@ -192,7 +202,7 @@ public class InterGroupOrderService {
             throw new RuntimeException("Only the receiving team owner can reject orders.");
         }
 
-        if (!"PENDING".equals(order.getStatus())) {
+        if (!"RFQ_CREATED".equals(order.getStatus()) && !"QUOTED".equals(order.getStatus()) && !"PENDING".equals(order.getStatus())) {
             throw new RuntimeException("Order is not in PENDING state.");
         }
 
@@ -251,6 +261,15 @@ public class InterGroupOrderService {
         dto.setDeliveryStatus(order.getDeliveryStatus());
         dto.setDeliveryConfirmedAt(order.getDeliveryConfirmedAt());
 
+        // Marketplace RFQ fields
+        dto.setMaterialSource(order.getMaterialSource());
+        dto.setServices(order.getServices());
+        dto.setProductType(order.getProductType());
+        dto.setQuotedPrice(order.getQuotedPrice());
+        dto.setQuotedNote(order.getQuotedNote());
+        dto.setQuotedAt(order.getQuotedAt());
+        dto.setUnit(order.getUnit());
+
         // Buyer trust score — updated to include delivery performance
         Team buyer = order.getBuyerTeam();
         int trustScore = 100;
@@ -272,8 +291,8 @@ public class InterGroupOrderService {
         InterGroupOrder order = orderRepo.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("Order not found"));
 
-        if (!"PENDING".equals(order.getStatus()) && !"ACCEPTED".equals(order.getStatus())) {
-            throw new RuntimeException("Chỉ đơn PENDING hoặc ACCEPTED mới được hủy.");
+        if (!"RFQ_CREATED".equals(order.getStatus()) && !"QUOTED".equals(order.getStatus()) && !"CONFIRMED".equals(order.getStatus()) && !"PENDING".equals(order.getStatus()) && !"ACCEPTED".equals(order.getStatus())) {
+            throw new RuntimeException("Chỉ đơn chưa sản xuất mới được hủy.");
         }
 
         boolean isBuyerOwner = (order.getBuyerTeam() != null && order.getBuyerTeam().getOwner().getId().equals(currentUser.getId()))
@@ -421,8 +440,8 @@ public class InterGroupOrderService {
         InterGroupOrder order = orderRepo.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("Order not found"));
 
-        if (!"ACCEPTED".equals(order.getStatus())) {
-            throw new RuntimeException("Chỉ đơn ACCEPTED mới đánh dấu đã giao.");
+        if (!"COMPLETED".equals(order.getStatus()) && !"ACCEPTED".equals(order.getStatus()) && !"IN_PRODUCTION".equals(order.getStatus()) && !"QC".equals(order.getStatus())) {
+            throw new RuntimeException("Đơn hàng chưa ở trạng thái có thể giao.");
         }
 
         Team sellerTeam = order.getSellerTeam();
@@ -430,7 +449,7 @@ public class InterGroupOrderService {
             throw new RuntimeException("Chỉ chủ xưởng bán mới được đánh dấu đã giao.");
         }
 
-        order.setStatus("DELIVERED");
+        order.setStatus("SHIPPING");
         order.setBuyerViewed(false);
 
         InterGroupOrder saved = orderRepo.save(order);
@@ -554,6 +573,87 @@ public class InterGroupOrderService {
         order.setPreferredDeliveryTo(dto.getPreferredDeliveryTo());
         order.setDeliveryFailureAction(dto.getDeliveryFailureAction());
         order.setDeliveryNote(dto.getDeliveryNote());
+    }
+
+    /**
+     * Xưởng gửi báo giá cho RFQ.
+     */
+    @Transactional
+    public InterGroupOrderDTO quoteOrder(UUID orderId, Double price, String note, User currentUser) {
+        InterGroupOrder order = orderRepo.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found"));
+        if (!order.getSellerTeam().getOwner().getId().equals(currentUser.getId())) {
+            throw new RuntimeException("Chỉ chủ xưởng mới được báo giá.");
+        }
+        if (!"RFQ_CREATED".equals(order.getStatus()) && !"PENDING".equals(order.getStatus())) {
+            throw new RuntimeException("Đơn hàng không ở trạng thái chờ báo giá.");
+        }
+        order.setQuotedPrice(price);
+        order.setQuotedNote(note);
+        order.setQuotedAt(LocalDateTime.now());
+        order.setStatus("QUOTED");
+        order.setBuyerViewed(false);
+        InterGroupOrder saved = orderRepo.save(order);
+
+        User buyerToNotify = resolveBuyerUser(order);
+        if (buyerToNotify != null) {
+            notifyUser(buyerToNotify, "Đã nhận báo giá",
+                    "Xưởng " + order.getSellerTeam().getName() + " đã báo giá cho đơn \"" + order.getTitle() + "\".",
+                    "ORDER_QUOTED", null);
+        }
+        return toDTO(saved);
+    }
+
+    /**
+     * Update order status along the new marketplace flow.
+     * Valid transitions: CONFIRMED -> IN_PRODUCTION -> QC -> COMPLETED -> SHIPPING -> DELIVERED
+     */
+    @Transactional
+    public InterGroupOrderDTO updateOrderStatus(UUID orderId, String newStatus, User currentUser) {
+        InterGroupOrder order = orderRepo.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found"));
+
+        if (!order.getSellerTeam().getOwner().getId().equals(currentUser.getId())) {
+            throw new RuntimeException("Chỉ chủ xưởng mới được cập nhật trạng thái.");
+        }
+
+        order.setStatus(newStatus);
+        order.setBuyerViewed(false);
+
+        // Auto deduct inventory when DELIVERED + factory-provided materials
+        if ("DELIVERED".equals(newStatus)) {
+            order.setDeliveryConfirmed(false);
+            String matSource = order.getMaterialSource();
+            if (matSource == null || "FACTORY_PROVIDED".equals(matSource) || "COMBINED".equals(matSource)) {
+                String productType = order.getProductType();
+                if (productType != null && !productType.isBlank() && order.getQuantity() != null) {
+                    try {
+                        inventoryService.deductPackagedStock(
+                                order.getSellerTeam().getId(), productType, order.getQuantity());
+                    } catch (Exception e) {
+                        System.err.println("Auto inventory deduction failed: " + e.getMessage());
+                    }
+                }
+            }
+        }
+
+        InterGroupOrder saved = orderRepo.save(order);
+
+        User buyerToNotify = resolveBuyerUser(order);
+        if (buyerToNotify != null) {
+            String statusVi = switch (newStatus) {
+                case "IN_PRODUCTION" -> "Đang sản xuất";
+                case "QC" -> "Đang kiểm tra chất lượng";
+                case "COMPLETED" -> "Đã hoàn thành";
+                case "SHIPPING" -> "Đang giao hàng";
+                case "DELIVERED" -> "Đã giao hàng";
+                default -> newStatus;
+            };
+            notifyUser(buyerToNotify, "Cập nhật đơn hàng",
+                    "Đơn \"" + order.getTitle() + "\" đã chuyển sang: " + statusVi,
+                    "ORDER_STATUS_UPDATED", null);
+        }
+        return toDTO(saved);
     }
 
     /** Resolve the buyer user: either buyerUser (personal) or buyerTeam owner */
