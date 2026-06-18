@@ -34,6 +34,11 @@ public class InterGroupOrderDTO {
     private Boolean buyerViewed;
     private Boolean sellerViewed;
 
+    // === Delivery Confirmation ===
+    private Boolean deliveryConfirmed;
+    private String deliveryStatus; // ON_TIME, LATE, NOT_DELIVERED
+    private LocalDateTime deliveryConfirmedAt;
+
     public InterGroupOrderDTO() {
     }
 
@@ -245,5 +250,29 @@ public class InterGroupOrderDTO {
 
     public void setSellerViewed(Boolean sellerViewed) {
         this.sellerViewed = sellerViewed;
+    }
+
+    public Boolean getDeliveryConfirmed() {
+        return deliveryConfirmed;
+    }
+
+    public void setDeliveryConfirmed(Boolean deliveryConfirmed) {
+        this.deliveryConfirmed = deliveryConfirmed;
+    }
+
+    public String getDeliveryStatus() {
+        return deliveryStatus;
+    }
+
+    public void setDeliveryStatus(String deliveryStatus) {
+        this.deliveryStatus = deliveryStatus;
+    }
+
+    public LocalDateTime getDeliveryConfirmedAt() {
+        return deliveryConfirmedAt;
+    }
+
+    public void setDeliveryConfirmedAt(LocalDateTime deliveryConfirmedAt) {
+        this.deliveryConfirmedAt = deliveryConfirmedAt;
     }
 }

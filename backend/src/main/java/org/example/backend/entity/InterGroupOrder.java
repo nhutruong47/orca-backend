@@ -37,7 +37,7 @@ public class InterGroupOrder {
     private LocalDateTime deadline;
 
     @Column(nullable = false)
-    private String status = "PENDING"; // PENDING, ACCEPTED, REJECTED, COMPLETED, CANCELED
+    private String status = "PENDING"; // PENDING, ACCEPTED, REJECTED, DELIVERED, CANCELED
 
     @Column(name = "linked_goal_id")
     private UUID linkedGoalId;
@@ -79,6 +79,18 @@ public class InterGroupOrder {
 
     @Column(name = "seller_viewed")
     private Boolean sellerViewed = false;
+
+    /** ON_TIME, LATE, NOT_DELIVERED — set by buyer when confirming receipt */
+    @Column(name = "delivery_status", length = 20)
+    private String deliveryStatus;
+
+    /** When buyer confirmed delivery */
+    @Column(name = "delivery_confirmed_at")
+    private LocalDateTime deliveryConfirmedAt;
+
+    /** Whether buyer has confirmed receipt */
+    @Column(name = "delivery_confirmed")
+    private Boolean deliveryConfirmed = false;
 
     @PrePersist
     protected void onCreate() {
@@ -262,5 +274,29 @@ public class InterGroupOrder {
 
     public void setSellerViewed(Boolean sellerViewed) {
         this.sellerViewed = sellerViewed;
+    }
+
+    public String getDeliveryStatus() {
+        return deliveryStatus;
+    }
+
+    public void setDeliveryStatus(String deliveryStatus) {
+        this.deliveryStatus = deliveryStatus;
+    }
+
+    public LocalDateTime getDeliveryConfirmedAt() {
+        return deliveryConfirmedAt;
+    }
+
+    public void setDeliveryConfirmedAt(LocalDateTime deliveryConfirmedAt) {
+        this.deliveryConfirmedAt = deliveryConfirmedAt;
+    }
+
+    public Boolean getDeliveryConfirmed() {
+        return deliveryConfirmed;
+    }
+
+    public void setDeliveryConfirmed(Boolean deliveryConfirmed) {
+        this.deliveryConfirmed = deliveryConfirmed;
     }
 }

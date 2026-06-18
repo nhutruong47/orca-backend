@@ -8,6 +8,7 @@ import org.example.backend.entity.User;
 import org.example.backend.repository.GoalRepository;
 import org.example.backend.repository.InterGroupOrderRepository;
 import org.example.backend.repository.TeamRepository;
+import org.example.backend.repository.ReviewRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -23,13 +24,16 @@ public class InterGroupOrderService {
     private final TeamRepository teamRepo;
     private final GoalRepository goalRepo;
     private final NotificationService notificationService;
+    private final ReviewRepository reviewRepo;
 
     public InterGroupOrderService(InterGroupOrderRepository orderRepo, TeamRepository teamRepo,
-            GoalRepository goalRepo, NotificationService notificationService) {
+            GoalRepository goalRepo, NotificationService notificationService,
+            ReviewRepository reviewRepo) {
         this.orderRepo = orderRepo;
         this.teamRepo = teamRepo;
         this.goalRepo = goalRepo;
         this.notificationService = notificationService;
+        this.reviewRepo = reviewRepo;
     }
 
     public List<InterGroupOrderDTO> getOutboundOrders(UUID buyerTeamId) {
@@ -242,11 +246,19 @@ public class InterGroupOrderService {
         dto.setDeliveryFailureAction(order.getDeliveryFailureAction());
         dto.setDeliveryNote(order.getDeliveryNote());
 
-        // Buyer trust score
+        // Delivery confirmation
+        dto.setDeliveryConfirmed(order.getDeliveryConfirmed());
+        dto.setDeliveryStatus(order.getDeliveryStatus());
+        dto.setDeliveryConfirmedAt(order.getDeliveryConfirmedAt());
+
+        // Buyer trust score — updated to include delivery performance
         Team buyer = order.getBuyerTeam();
-        int trustScore = buyer != null && buyer.getTotalOrders() > 0
-                ? (int) ((double) buyer.getCompletedOrders() / buyer.getTotalOrders() * 100)
-                : 100; // New team/personal buyer = 100% trust
+        int trustScore = 100;
+        if (buyer != null && buyer.getTotalOrders() > 0) {
+            int completed = buyer.getCompletedOrders();
+            int cancelled = buyer.getCancelledOrders();
+            trustScore = (int) ((double) completed / (completed + cancelled) * 100);
+        }
         dto.setBuyerTrustScore(trustScore);
 
         return dto;
@@ -402,7 +414,7 @@ public class InterGroupOrderService {
     }
 
     /**
-     * Hoàn thành đơn hàng — chỉ Seller Owner đánh dấu hoàn thành
+     * Xưởng đánh dấu đã giao hàng — chuyển sang DELIVERED, chờ người mua xác nhận
      */
     @Transactional
     public InterGroupOrderDTO completeOrder(UUID orderId, User currentUser) {
@@ -410,38 +422,109 @@ public class InterGroupOrderService {
                 .orElseThrow(() -> new RuntimeException("Order not found"));
 
         if (!"ACCEPTED".equals(order.getStatus())) {
-            throw new RuntimeException("Chỉ đơn ACCEPTED mới đánh dấu hoàn thành.");
+            throw new RuntimeException("Chỉ đơn ACCEPTED mới đánh dấu đã giao.");
         }
 
         Team sellerTeam = order.getSellerTeam();
         if (!sellerTeam.getOwner().getId().equals(currentUser.getId())) {
-            throw new RuntimeException("Chỉ chủ xưởng bán mới được đánh dấu hoàn thành.");
+            throw new RuntimeException("Chỉ chủ xưởng bán mới được đánh dấu đã giao.");
         }
 
-        order.setStatus("COMPLETED");
+        order.setStatus("DELIVERED");
         order.setBuyerViewed(false);
 
-        // Trust: +1 completed for both buyer and seller
+        InterGroupOrder saved = orderRepo.save(order);
+
+        // Notify buyer that order has been delivered
+        User buyerToNotify = resolveBuyerUser(order);
+        if (buyerToNotify != null) {
+            notifyUser(buyerToNotify,
+                    "Đơn hàng đã giao — Chờ xác nhận",
+                    "Đơn hàng \"" + order.getTitle() + "\" đã được " + sellerTeam.getName() + " giao. Vui lòng xác nhận đã nhận hàng đúng hẹn hay không.",
+                    "ORDER_DELIVERED", null);
+        }
+
+        return toDTO(saved);
+    }
+
+    /**
+     * Người mua xác nhận đã nhận hàng + đánh giá sao.
+     * Trạng thái đơn: ON_TIME / LATE / NOT_DELIVERED
+     * Trust score của xưởng được cập nhật theo đánh giá.
+     */
+    @Transactional
+    public InterGroupOrderDTO buyerConfirmDelivery(UUID orderId, String deliveryStatus,
+            int rating, String comment, User currentUser) {
+        InterGroupOrder order = orderRepo.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found"));
+
+        if (!"DELIVERED".equals(order.getStatus())) {
+            throw new RuntimeException("Chỉ đơn DELIVERED mới xác nhận được.");
+        }
+
+        // Verify buyer
+        boolean isBuyer = (order.getBuyerTeam() != null && order.getBuyerTeam().getOwner().getId().equals(currentUser.getId()))
+                || (order.getBuyerUser() != null && order.getBuyerUser().getId().equals(currentUser.getId()));
+        if (!isBuyer) {
+            throw new RuntimeException("Chỉ bên mua mới xác nhận được.");
+        }
+
+        if (order.getDeliveryConfirmed() != null && order.getDeliveryConfirmed()) {
+            throw new RuntimeException("Đơn này đã được xác nhận trước đó.");
+        }
+
+        if (!"ON_TIME".equals(deliveryStatus) && !"LATE".equals(deliveryStatus) && !"NOT_DELIVERED".equals(deliveryStatus)) {
+            throw new RuntimeException("Trạng thái giao hàng không hợp lệ.");
+        }
+
+        if (rating < 1 || rating > 5) {
+            throw new RuntimeException("Đánh giá phải từ 1 đến 5 sao.");
+        }
+
+        // Update order delivery info
+        order.setDeliveryConfirmed(true);
+        order.setDeliveryConfirmedAt(LocalDateTime.now());
+        order.setDeliveryStatus(deliveryStatus);
+        order.setStatus("COMPLETED");
+
+        // Update seller trust stats
+        Team sellerTeam = order.getSellerTeam();
+        if ("ON_TIME".equals(deliveryStatus)) {
+            sellerTeam.setOnTimeOrders(sellerTeam.getOnTimeOrders() + 1);
+        } else if ("LATE".equals(deliveryStatus)) {
+            sellerTeam.setLateOrders(sellerTeam.getLateOrders() + 1);
+        }
+        sellerTeam.setTotalRatings(sellerTeam.getTotalRatings() + 1);
+        sellerTeam.setSumRatings(sellerTeam.getSumRatings() + rating);
+        sellerTeam.setCompletedOrders(sellerTeam.getCompletedOrders() + 1);
+        sellerTeam.setTotalOrders(sellerTeam.getTotalOrders() + 1);
+        teamRepo.save(sellerTeam);
+
+        // Update buyer team completed orders
         Team buyer = order.getBuyerTeam();
         if (buyer != null) {
             buyer.setCompletedOrders(buyer.getCompletedOrders() + 1);
             teamRepo.save(buyer);
         }
 
-        sellerTeam.setCompletedOrders(sellerTeam.getCompletedOrders() + 1);
-        sellerTeam.setTotalOrders(sellerTeam.getTotalOrders() + 1);
-        teamRepo.save(sellerTeam);
+        // Save review
+        org.example.backend.entity.Review review = new org.example.backend.entity.Review();
+        review.setOrder(order);
+        review.setBuyerTeam(order.getBuyerTeam());
+        review.setBuyerUser(order.getBuyerUser());
+        review.setSellerTeam(sellerTeam);
+        review.setRating(rating);
+        review.setComment(comment);
+        review.setDeliveryResult(deliveryStatus);
+        reviewRepo.save(review);
 
         InterGroupOrder saved = orderRepo.save(order);
 
-        // Notify buyer that order is completed
-        User buyerToNotify = resolveBuyerUser(order);
-        if (buyerToNotify != null) {
-            notifyUser(buyerToNotify,
-                    "Đơn hàng đã hoàn thành",
-                    "Đơn hàng \"" + order.getTitle() + "\" đã được " + sellerTeam.getName() + " hoàn thành.",
-                    "ORDER_COMPLETED", null);
-        }
+        // Notify seller
+        notifyUser(sellerTeam.getOwner(),
+                "Người mua xác nhận giao hàng",
+                "Đơn \"" + order.getTitle() + "\" đã được xác nhận: " + deliveryStatus + " | " + rating + " sao.",
+                "ORDER_COMPLETED", null);
 
         return toDTO(saved);
     }

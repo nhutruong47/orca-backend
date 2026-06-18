@@ -112,8 +112,8 @@ public class AdminService {
                 .filter(order -> isActiveStatus(order.getStatus()))
                 .count());
         overview.put("overdueProductionOrders", productionOrders.stream()
-                .filter(order -> order.getDeadline() != null
-                        && order.getDeadline().isBefore(now)
+                .filter(order -> order.getInternalDeadline() != null
+                        && order.getInternalDeadline().isBefore(now)
                         && isActiveStatus(order.getStatus()))
                 .count());
         overview.put("totalBatches", productionBatches.size());

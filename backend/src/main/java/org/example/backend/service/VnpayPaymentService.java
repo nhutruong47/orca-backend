@@ -77,7 +77,7 @@ public class VnpayPaymentService {
     @Value("${momo.ipn-url:http://localhost:8080/api/payments/momo/ipn}")
     private String momoIpnUrl;
 
-    @Value("${momo.allow-manual-confirm:false}")
+    @Value("${momo.allow-manual-confirm:true}")
     private boolean momoAllowManualConfirm;
 
     public VnpayPaymentService(PaymentTransactionRepository paymentRepository, UserRepository userRepository) {

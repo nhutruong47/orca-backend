@@ -97,6 +97,20 @@ public class InterGroupOrderController {
         }
     }
 
+    @PostMapping("/{orderId}/buyer-confirm")
+    public ResponseEntity<?> buyerConfirmDelivery(@PathVariable UUID orderId,
+            @AuthenticationPrincipal User user,
+            @RequestBody Map<String, Object> payload) {
+        try {
+            String deliveryStatus = (String) payload.get("deliveryStatus");
+            int rating = ((Number) payload.get("rating")).intValue();
+            String comment = (String) payload.get("comment");
+            return ResponseEntity.ok(orderService.buyerConfirmDelivery(orderId, deliveryStatus, rating, comment, user));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @PostMapping("/mark-viewed")
     public ResponseEntity<?> markViewed(@RequestBody Map<String, Object> payload) {
         try {

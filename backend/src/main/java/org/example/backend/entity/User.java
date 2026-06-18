@@ -59,14 +59,29 @@ public class User implements UserDetails {
         }
     }
 
-    /** AI luôn hoạt động — không giới hạn trial */
+    /** AI trial active nếu: (1) plan là free VÀ (2) chưa hết 7 ngày từ lúc đăng ký */
     public boolean isAiTrialActive() {
-        return true;
+        if (!"free".equals(this.aiPlan)) {
+            return false;
+        }
+        if (this.aiTrialStartDate == null) {
+            return true;
+        }
+        java.time.Duration elapsed = java.time.Duration.between(this.aiTrialStartDate, java.time.LocalDateTime.now());
+        return elapsed.toDays() < 7;
     }
 
-    /** Số ngày trial còn lại — luôn trả về không giới hạn */
+    /** Số ngày trial còn lại — trả về 0 nếu đã hết */
     public long getAiTrialDaysRemaining() {
-        return 9999;
+        if (!"free".equals(this.aiPlan)) {
+            return 0;
+        }
+        if (this.aiTrialStartDate == null) {
+            return 7;
+        }
+        java.time.Duration elapsed = java.time.Duration.between(this.aiTrialStartDate, java.time.LocalDateTime.now());
+        long remaining = 7 - elapsed.toDays();
+        return Math.max(0, remaining);
     }
 
     public User() {

@@ -1,145 +1,48 @@
-package org.example.backend.entity;
+package org.example.backend.dto;
 
-import jakarta.persistence.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.UUID;
+import java.util.List;
+import java.util.Map;
 
-@Entity
-@Table(name = "production_orders")
-public class ProductionOrder {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(updatable = false, nullable = false)
-    private UUID id;
-
-    @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "team_id", nullable = false)
-    private Team team;
-
-    @Column(name = "order_code", unique = true, length = 40)
+public class ProductionOrderDTO {
+    private String id;
+    private String teamId;
     private String orderCode;
-
-    @Column(nullable = false, length = 500)
     private String title;
-
-    @Column(columnDefinition = "TEXT")
     private String description;
-
-    @Column(name = "customer_name")
     private String customerName;
-
-    // === THONG TIN SAN PHAM ===
-    @Column(name = "product_type", length = 100)
     private String productType;
-
-    @Column(name = "process_type", length = 100)
     private String processType;
-
-    @Column(name = "roast_level", length = 50)
     private String roastLevel;
-
-    @Column(name = "package_size", length = 100)
     private String packageSize;
-
-    @Column(name = "total_packages")
     private Integer totalPackages;
-
-    // === YIELD & INPUT ===
-    @Column(name = "output_target")
     private Double outputTarget;
-
-    @Column(name = "expected_yield")
     private Double expectedYield;
-
-    @Column(name = "expected_loss")
     private Double expectedLoss;
-
-    @Column(name = "input_required")
     private Double inputRequired;
-
     private String unit;
-
-    // === CAC NGAY QUAN TRONG ===
-    @Column(name = "order_date")
     private LocalDate orderDate;
-
-    @Column(name = "confirm_date")
     private LocalDate confirmDate;
-
-    @Column(name = "production_start_date")
     private LocalDate productionStartDate;
-
-    @Column(name = "internal_deadline")
     private LocalDateTime internalDeadline;
-
-    @Column(name = "customer_delivery_date")
     private LocalDate customerDeliveryDate;
-
-    @Column(name = "safety_buffer_days")
     private Integer safetyBufferDays;
-
-    // === GIAO HANG ===
-    @Column(name = "recipient_name")
     private String recipientName;
-
-    @Column(name = "recipient_phone")
     private String recipientPhone;
-
-    @Column(name = "shipping_note", columnDefinition = "TEXT")
     private String shippingNote;
-
-    // === TRANG THAI & SẢN LƯỢNG ===
-    @Column(nullable = false)
-    private String status = "PENDING";
-
-    @Column(name = "completed_quantity")
+    private String status;
     private Double completedQuantity;
-
-    @Column(name = "created_at", nullable = false, updatable = false)
+    private Double progressPercent;
+    private Double remainingQuantity;
     private LocalDateTime createdAt;
-
-    @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    @PrePersist
-    protected void onCreate() {
-        this.createdAt = LocalDateTime.now();
-        this.updatedAt = this.createdAt;
-        if (this.orderCode == null || this.orderCode.isBlank()) {
-            this.orderCode = "PO-" + System.currentTimeMillis();
-        }
-        if (this.safetyBufferDays == null) {
-            this.safetyBufferDays = 2;
-        }
-        calculateInternalDeadline();
-    }
-
-    @PreUpdate
-    protected void onUpdate() {
-        this.updatedAt = LocalDateTime.now();
-        calculateInternalDeadline();
-    }
-
-    private void calculateInternalDeadline() {
-        if (this.customerDeliveryDate != null && this.safetyBufferDays != null) {
-            this.internalDeadline = this.customerDeliveryDate
-                    .atStartOfDay()
-                    .minusDays(this.safetyBufferDays);
-        }
-    }
-
-    public void calculateInputRequired() {
-        if (this.outputTarget != null && this.expectedYield != null && this.expectedYield > 0) {
-            this.inputRequired = Math.ceil((this.outputTarget / this.expectedYield) * 100.0) / 100.0;
-        }
-    }
-
-    public UUID getId() { return id; }
-    public void setId(UUID id) { this.id = id; }
-    public Team getTeam() { return team; }
-    public void setTeam(Team team) { this.team = team; }
+    // Getters and setters
+    public String getId() { return id; }
+    public void setId(String id) { this.id = id; }
+    public String getTeamId() { return teamId; }
+    public void setTeamId(String teamId) { this.teamId = teamId; }
     public String getOrderCode() { return orderCode; }
     public void setOrderCode(String orderCode) { this.orderCode = orderCode; }
     public String getTitle() { return title; }
@@ -190,17 +93,12 @@ public class ProductionOrder {
     public void setStatus(String status) { this.status = status; }
     public Double getCompletedQuantity() { return completedQuantity; }
     public void setCompletedQuantity(Double completedQuantity) { this.completedQuantity = completedQuantity; }
+    public Double getProgressPercent() { return progressPercent; }
+    public void setProgressPercent(Double progressPercent) { this.progressPercent = progressPercent; }
+    public Double getRemainingQuantity() { return remainingQuantity; }
+    public void setRemainingQuantity(Double remainingQuantity) { this.remainingQuantity = remainingQuantity; }
     public LocalDateTime getCreatedAt() { return createdAt; }
+    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
-
-    public double getProgressPercent() {
-        if (outputTarget == null || outputTarget == 0) return 0;
-        double completed = completedQuantity != null ? completedQuantity : 0;
-        return Math.min(100, Math.round((completed / outputTarget) * 1000.0) / 10.0);
-    }
-
-    public double getRemainingQuantity() {
-        double completed = completedQuantity != null ? completedQuantity : 0;
-        return Math.max(0, (outputTarget != null ? outputTarget : 0) - completed);
-    }
+    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
 }

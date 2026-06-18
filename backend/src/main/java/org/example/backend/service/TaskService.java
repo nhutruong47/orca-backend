@@ -6,6 +6,12 @@ import org.example.backend.entity.*;
 import org.example.backend.repository.*;
 import org.springframework.stereotype.Service;
 
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+
+import java.io.ByteArrayOutputStream;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -18,16 +24,19 @@ public class TaskService {
     private final TaskChecklistRepository checklistRepo;
     private final NotificationService notificationService;
     private final TeamMemberRepository teamMemberRepo;
+    private final AttendanceRepository attendanceRepo;
 
     public TaskService(TaskRepository taskRepo, GoalRepository goalRepo,
             UserRepository userRepo, TaskChecklistRepository checklistRepo,
-            NotificationService notificationService, TeamMemberRepository teamMemberRepo) {
+            NotificationService notificationService, TeamMemberRepository teamMemberRepo,
+            AttendanceRepository attendanceRepo) {
         this.taskRepo = taskRepo;
         this.goalRepo = goalRepo;
         this.userRepo = userRepo;
         this.checklistRepo = checklistRepo;
         this.notificationService = notificationService;
         this.teamMemberRepo = teamMemberRepo;
+        this.attendanceRepo = attendanceRepo;
     }
 
     public List<TaskDTO> getByGoal(UUID goalId) {
@@ -40,6 +49,11 @@ public class TaskService {
 
     public List<TaskDTO> getAll() {
         return taskRepo.findAll().stream().map(this::toDTO).collect(Collectors.toList());
+    }
+
+    public TaskDTO getById(UUID id) {
+        Task t = taskRepo.findById(id).orElseThrow(() -> new RuntimeException("Task not found"));
+        return toDTO(t);
     }
 
     public TaskDTO create(TaskDTO dto) {
@@ -225,11 +239,19 @@ public class TaskService {
                 .mapToDouble(t -> t.getActualWorkload() != null ? t.getActualWorkload() : (t.getWorkload() != null ? t.getWorkload() : 0))
                 .sum();
 
+            // Get attendance data for this member and team
+            List<Attendance> attendances = attendanceRepo.findByUserIdAndTeamId(member.getId(), teamId);
+            double totalRegularHours = attendances.stream().mapToDouble(a -> a.getRegularHours() != null ? a.getRegularHours() : 0.0).sum();
+            double totalOvertimeHours = attendances.stream().mapToDouble(a -> a.getOvertimeHours() != null ? a.getOvertimeHours() : 0.0).sum();
+
             // Use hourly rate from tasks or default 50000 VND/hour
             double avgRate = teamTasks.stream()
                 .filter(t -> t.getHourlyRate() != null)
                 .mapToDouble(Task::getHourlyRate)
                 .average().orElse(50000);
+            
+            // Overtime rate defaults to 1.5x of normal rate
+            double defaultOvertimeRate = avgRate * 1.5;
 
             SalaryDTO dto = new SalaryDTO();
             dto.setMemberId(member.getId().toString());
@@ -238,8 +260,16 @@ public class TaskService {
             dto.setCompletedTasks(completed);
             dto.setTotalWorkload(totalWorkload);
             dto.setTotalActualWorkload(totalWorkload);
+            
+            dto.setRegularHours(totalRegularHours);
+            dto.setOvertimeHours(totalOvertimeHours);
             dto.setHourlyRate(avgRate);
-            dto.setEstimatedSalary(totalWorkload * avgRate);
+            dto.setOvertimeRate(defaultOvertimeRate);
+            
+            // Salary calculation based on Attendance, not Task Workload anymore
+            // Fallback to totalWorkload if no attendance data exists (backward compatibility or testing)
+            double billableRegular = totalRegularHours > 0 ? totalRegularHours : totalWorkload;
+            dto.setEstimatedSalary((billableRegular * avgRate) + (totalOvertimeHours * defaultOvertimeRate));
             report.add(dto);
         }
         return report;
@@ -381,5 +411,68 @@ public class TaskService {
         );
 
         return toDTO(saved);
+    }
+
+    public byte[] exportSalaryExcel(UUID teamId) throws Exception {
+        List<SalaryDTO> report = getSalaryReport(teamId);
+        try (Workbook wb = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            Sheet sheet = wb.createSheet("Bang luong");
+            String[] headers = {"STT", "Nhan vien", "Tong task", "Hoan thanh", "Gio thuong", "Gio tang ca",
+                    "Don gia/gio (VND)", "Luong thuc nhan (VND)"};
+            Row hRow = sheet.createRow(0);
+            for (int i = 0; i < headers.length; i++) {
+                hRow.createCell(i).setCellValue(headers[i]);
+            }
+            double totalSalary = 0;
+            for (int i = 0; i < report.size(); i++) {
+                SalaryDTO s = report.get(i);
+                Row row = sheet.createRow(i + 1);
+                row.createCell(0).setCellValue(i + 1);
+                row.createCell(1).setCellValue(s.getMemberName());
+                row.createCell(2).setCellValue(s.getTotalTasks());
+                row.createCell(3).setCellValue(s.getCompletedTasks());
+                row.createCell(4).setCellValue(s.getRegularHours());
+                row.createCell(5).setCellValue(s.getOvertimeHours());
+                row.createCell(6).setCellValue(s.getHourlyRate());
+                double salary = (s.getRegularHours() * s.getHourlyRate())
+                        + (s.getOvertimeHours() * s.getOvertimeRate());
+                totalSalary += salary;
+                row.createCell(7).setCellValue(salary);
+            }
+            Row totalRow = sheet.createRow(report.size() + 1);
+            totalRow.createCell(0).setCellValue("");
+            totalRow.createCell(1).setCellValue("TONG");
+            totalRow.createCell(7).setCellValue(totalSalary);
+            for (int i = 0; i < headers.length; i++) {
+                sheet.autoSizeColumn(i);
+            }
+            wb.write(out);
+            return out.toByteArray();
+        }
+    }
+
+    public Map<String, Object> payoutSalary(UUID teamId, UUID actorId) {
+        List<SalaryDTO> report = getSalaryReport(teamId);
+        double totalSalary = report.stream()
+                .mapToDouble(s -> (s.getRegularHours() * s.getHourlyRate())
+                        + (s.getOvertimeHours() * s.getOvertimeRate()))
+                .sum();
+        if (totalSalary <= 0) {
+            throw new RuntimeException("Khong co luong de phat cho nhom nay.");
+        }
+        User actor = userRepo.findById(actorId).orElseThrow(() -> new RuntimeException("User not found"));
+        String description = "Phat luong thang cho " + report.size() + " nhan vien. Tong quy: "
+                + String.format("%,.0f", totalSalary) + " VND.";
+        notificationService.createAndSend(
+                actor,
+                "Phat luong thanh cong",
+                description,
+                "SALARY_PAYOUT",
+                null);
+        return Map.of(
+                "message", "Phat luong thanh cong",
+                "totalEmployees", report.size(),
+                "totalSalary", totalSalary,
+                "currency", "VND");
     }
 }

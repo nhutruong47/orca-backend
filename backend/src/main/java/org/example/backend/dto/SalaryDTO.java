@@ -10,6 +10,10 @@ public class SalaryDTO {
     private double hourlyRate;
     private double estimatedSalary;
 
+    private double regularHours;
+    private double overtimeHours;
+    private double overtimeRate;
+
     // === Getters & Setters ===
     public String getMemberId() { return memberId; }
     public void setMemberId(String memberId) { this.memberId = memberId; }
@@ -31,6 +35,15 @@ public class SalaryDTO {
 
     public double getHourlyRate() { return hourlyRate; }
     public void setHourlyRate(double hourlyRate) { this.hourlyRate = hourlyRate; }
+    
+    public double getRegularHours() { return regularHours; }
+    public void setRegularHours(double regularHours) { this.regularHours = regularHours; }
+
+    public double getOvertimeHours() { return overtimeHours; }
+    public void setOvertimeHours(double overtimeHours) { this.overtimeHours = overtimeHours; }
+
+    public double getOvertimeRate() { return overtimeRate; }
+    public void setOvertimeRate(double overtimeRate) { this.overtimeRate = overtimeRate; }
 
     public double getEstimatedSalary() { return estimatedSalary; }
     public void setEstimatedSalary(double estimatedSalary) { this.estimatedSalary = estimatedSalary; }

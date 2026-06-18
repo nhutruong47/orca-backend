@@ -79,6 +79,18 @@ public class Team {
     @Column(name = "total_orders", nullable = false, columnDefinition = "integer default 0")
     private int totalOrders = 0;
 
+    @Column(name = "on_time_orders", nullable = false, columnDefinition = "integer default 0")
+    private int onTimeOrders = 0;
+
+    @Column(name = "late_orders", nullable = false, columnDefinition = "integer default 0")
+    private int lateOrders = 0;
+
+    @Column(name = "total_ratings", nullable = false, columnDefinition = "integer default 0")
+    private int totalRatings = 0;
+
+    @Column(name = "sum_ratings", nullable = false, columnDefinition = "double default 0.0")
+    private double sumRatings = 0.0;
+
     @Column(name = "invite_code", unique = true, length = 6)
     private String inviteCode;
 
@@ -297,6 +309,38 @@ public class Team {
 
     public void setTotalOrders(int totalOrders) {
         this.totalOrders = totalOrders;
+    }
+
+    public int getOnTimeOrders() {
+        return onTimeOrders;
+    }
+
+    public void setOnTimeOrders(int onTimeOrders) {
+        this.onTimeOrders = onTimeOrders;
+    }
+
+    public int getLateOrders() {
+        return lateOrders;
+    }
+
+    public void setLateOrders(int lateOrders) {
+        this.lateOrders = lateOrders;
+    }
+
+    public int getTotalRatings() {
+        return totalRatings;
+    }
+
+    public void setTotalRatings(int totalRatings) {
+        this.totalRatings = totalRatings;
+    }
+
+    public double getSumRatings() {
+        return sumRatings;
+    }
+
+    public void setSumRatings(double sumRatings) {
+        this.sumRatings = sumRatings;
     }
 
     public String getInviteCode() {

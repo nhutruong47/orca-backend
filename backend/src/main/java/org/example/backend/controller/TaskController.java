@@ -12,6 +12,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.ResponseEntity;
+
+import java.io.ByteArrayOutputStream;
+
 @RestController
 @RequestMapping("/api/tasks")
 public class TaskController {
@@ -47,6 +58,11 @@ public class TaskController {
     @GetMapping("/member/{memberId}/kpi")
     public ResponseEntity<?> getMemberKpi(@PathVariable UUID memberId) {
         return ResponseEntity.ok(taskService.getMemberKpi(memberId));
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<?> getTaskDetail(@PathVariable UUID id) {
+        return ResponseEntity.ok(taskService.getById(id));
     }
 
     @PostMapping
@@ -149,6 +165,22 @@ public class TaskController {
     @GetMapping("/salary/{teamId}")
     public ResponseEntity<?> getSalaryReport(@PathVariable UUID teamId) {
         return ResponseEntity.ok(taskService.getSalaryReport(teamId));
+    }
+
+    @GetMapping("/salary/{teamId}/export-excel")
+    public ResponseEntity<byte[]> exportSalaryExcel(@PathVariable UUID teamId) throws Exception {
+        byte[] excelBytes = taskService.exportSalaryExcel(teamId);
+        String filename = "bang-luong-" + teamId + ".xlsx";
+        return ResponseEntity.ok()
+            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+            .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+            .body(excelBytes);
+    }
+
+    @PostMapping("/salary/{teamId}/payout")
+    public ResponseEntity<?> payoutSalary(@PathVariable UUID teamId,
+            @AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(taskService.payoutSalary(teamId, user.getId()));
     }
 
     @DeleteMapping("/{id}")
