@@ -134,7 +134,28 @@ public class TaskService {
             String dead = (String) updates.get("deadline");
             t.setDeadline(dead != null ? java.time.LocalDateTime.parse(dead) : null);
         }
-        return toDTO(taskRepo.save(t));
+
+        if (updates.containsKey("actualOutput") || updates.containsKey("outputTarget")) {
+            Double target = t.getOutputTarget() != null ? t.getOutputTarget() : (t.getWorkload() != null ? t.getWorkload() : 0.0);
+            Double actual = t.getActualOutput() != null ? t.getActualOutput() : 0.0;
+            
+            if (target > 0) {
+                if (actual >= target) {
+                    t.setStatus("COMPLETED");
+                    t.setCompletionPercentage(100);
+                } else if (actual > 0 && !"COMPLETED".equals(t.getStatus())) {
+                    t.setStatus("IN_PROGRESS");
+                }
+            } else if (actual > 0 && !"COMPLETED".equals(t.getStatus())) {
+                t.setStatus("IN_PROGRESS");
+            }
+        }
+
+        Task saved = taskRepo.save(t);
+        if (saved.getGoal() != null) {
+            updateGoalProgress(saved.getGoal().getId());
+        }
+        return toDTO(saved);
     }
 
     public TaskDTO assign(UUID id, UUID memberId) {
