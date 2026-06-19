@@ -104,7 +104,9 @@ public class MockDataInitializer implements CommandLineRunner {
             int ratings = 5 + (i % 10);
             team.setTotalRatings(ratings);
             team.setSumRatings(ratings * (4.0 + (i % 3) * 0.5));
-            team.setFactoryImageUrl(images.get(i % images.size()));
+            if (i != 4 && i != 7 && i != 18) {
+                team.setFactoryImageUrl(images.get(i % images.size()));
+            }
             team.setFactoryType("roastery");
             
             teamRepository.save(team);
