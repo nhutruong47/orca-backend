@@ -84,6 +84,7 @@ public class MockDataInitializer implements CommandLineRunner {
                         .fullName("Chủ xưởng " + (i + 1))
                         .email("factory" + (i + 1) + "@orca.local")
                         .role(Role.MEMBER)
+                        .chipId(java.util.UUID.randomUUID().toString())
                         .build();
                 factoryOwner = userRepository.save(factoryOwner);
             }

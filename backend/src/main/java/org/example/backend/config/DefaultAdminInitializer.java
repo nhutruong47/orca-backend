@@ -46,6 +46,7 @@ public class DefaultAdminInitializer implements CommandLineRunner {
                 .fullName(adminFullName)
                 .email(adminEmail)
                 .role(Role.ADMIN)
+                .chipId(java.util.UUID.randomUUID().toString())
                 .build();
 
         userRepository.save(admin);
