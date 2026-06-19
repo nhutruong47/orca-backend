@@ -48,12 +48,20 @@ public class MockDataInitializer implements CommandLineRunner {
 
         String[] specialties = {"Cung ứng cà phê nhân", "Rang cà phê", "Đóng gói", "Gia công OEM", "Xử lý sau thu hoạch"};
         List<String> images = Arrays.asList(
-            "https://images.unsplash.com/photo-1497935586351-b67a49e012bf?w=500&q=80",
             "https://images.unsplash.com/photo-1559525839-b184a4d698c7?w=500&q=80",
+            "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=500&q=80",
+            "https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=500&q=80",
             "https://images.unsplash.com/photo-1511920170033-f8396924c348?w=500&q=80",
+            "https://images.unsplash.com/photo-1563089145-599997674d42?w=500&q=80",
+            "https://images.unsplash.com/photo-1442512595305-bd2700d599a0?w=500&q=80",
+            "https://images.unsplash.com/photo-1497935586351-b67a49e012bf?w=500&q=80",
+            "https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=500&q=80",
+            "https://images.unsplash.com/photo-1504813184591-58d0426f8d05?w=500&q=80",
+            "https://images.unsplash.com/photo-1551888419-f538eec4c278?w=500&q=80",
             "https://images.unsplash.com/photo-1587293852726-70cdb56c2866?w=500&q=80",
             "https://images.unsplash.com/photo-1524350876685-274059332603?w=500&q=80",
-            "https://images.unsplash.com/photo-1600093463592-8e36ae95ef56?w=500&q=80"
+            "https://images.unsplash.com/photo-1512516624996-24ba08ffc05e?w=500&q=80",
+            "https://images.unsplash.com/photo-1507133750050-4a2ce37285f1?w=500&q=80"
         );
 
         for (int i = 0; i < 20; i++) {
