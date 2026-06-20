@@ -143,11 +143,22 @@ public class TaskService {
                 if (actual >= target) {
                     t.setStatus("COMPLETED");
                     t.setCompletionPercentage(100);
-                } else if (actual > 0 && !"COMPLETED".equals(t.getStatus())) {
-                    t.setStatus("IN_PROGRESS");
+                } else {
+                    t.setCompletionPercentage((int) Math.round((actual / target) * 100));
+                    if (actual > 0) {
+                        t.setStatus("IN_PROGRESS");
+                    } else {
+                        t.setStatus("PENDING");
+                    }
                 }
-            } else if (actual > 0 && !"COMPLETED".equals(t.getStatus())) {
-                t.setStatus("IN_PROGRESS");
+            } else {
+                if (actual > 0) {
+                    t.setStatus("IN_PROGRESS");
+                    t.setCompletionPercentage(50); // fallback or keep current
+                } else {
+                    t.setStatus("PENDING");
+                    t.setCompletionPercentage(0);
+                }
             }
         }
 
