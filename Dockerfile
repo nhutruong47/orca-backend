@@ -10,8 +10,8 @@ COPY backend/pom.xml .
 RUN mvn dependency:go-offline -B
 
 COPY backend/src ./src
-# Build package using offline mode to avoid remote checking and save build time
-RUN mvn package -o -DskipTests -B
+# Build package (removed -o to resolve transitive dependencies online if missing)
+RUN mvn package -DskipTests -B
 
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
