@@ -366,6 +366,201 @@ Branch and commit recommendations:
 ## Maintenance Notes
 
 - `.legacy/` contains archived folders from the previous project layout. It is ignored by Git and should not be used for active development.
+Default backend URL:
+
+```text
+http://localhost:8080
+```
+
+Run backend with local H2 file database:
+
+```powershell
+cd backend
+.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=local"
+```
+
+H2 Console:
+
+```text
+http://localhost:8080/h2-console
+```
+
+### Start Frontend
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Default frontend URL:
+
+```text
+http://localhost:5173
+```
+
+## Environment Variables
+
+Production secrets must be provided through environment variables or a secret manager. Do not commit real secrets to the repository.
+
+Backend:
+
+```env
+DB_URL=jdbc:postgresql://host:5432/database
+DB_USERNAME=database_user
+DB_PASSWORD=database_password
+
+JWT_SECRET=replace_with_a_long_random_secret
+
+GOOGLE_CLIENT_ID=google_oauth_client_id
+GOOGLE_CLIENT_SECRET=google_oauth_client_secret
+
+MAIL_USERNAME=smtp_username
+MAIL_PASSWORD=smtp_password_or_app_password
+
+FRONTEND_URL=https://your-frontend-domain.com
+
+AI_SERVICE_API_KEY=ai_service_api_key
+
+VNPAY_PAY_URL=https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
+VNPAY_TMN_CODE=vnpay_tmn_code
+VNPAY_HASH_SECRET=vnpay_hash_secret
+VNPAY_RETURN_URL=https://your-backend-domain.com/api/payments/vnpay/return
+```
+
+Frontend:
+
+```env
+VITE_API_BASE_URL=http://localhost:8080
+```
+
+## Development Commands
+
+Backend:
+
+```powershell
+cd backend
+.\mvnw.cmd spring-boot:run
+.\mvnw.cmd test
+.\mvnw.cmd clean package
+```
+
+Frontend:
+
+```powershell
+cd frontend
+npm install
+npm run dev
+npm run lint
+npm run build
+npm run preview
+```
+
+## Testing and Quality Gates
+
+Minimum checks before merging or deploying:
+
+```powershell
+cd backend
+.\mvnw.cmd test
+```
+
+```powershell
+cd frontend
+npm run lint
+npm run build
+```
+
+Recommended engineering gates:
+
+- Backend unit/integration tests must pass.
+- Frontend lint and production build must pass.
+- No generated artifacts such as `target/`, `dist/`, `node_modules/`, `.class`, `.log`, or `.err` should be committed.
+- No credentials or private keys should be committed.
+- API changes should include DTO, service, and frontend service updates when applicable.
+
+## Deployment
+
+### Backend Docker Build
+
+From the repository root:
+
+```bash
+docker build -t orca-backend backend
+```
+
+Run with an environment file:
+
+```bash
+docker run -p 8080:8080 --env-file .env orca-backend
+```
+
+The backend Dockerfile starts the application with the `prod` Spring profile.
+
+### Frontend Build
+
+```powershell
+cd frontend
+npm run build
+```
+
+The production output is generated in:
+
+```text
+frontend/dist/
+```
+
+### Production Checklist
+
+- Configure PostgreSQL connection variables.
+- Configure JWT, OAuth2, SMTP, AI service, and VNPAY secrets.
+- Set `FRONTEND_URL` to the deployed frontend domain.
+- Set `VITE_API_BASE_URL` to the deployed backend API URL.
+- Verify OAuth callback URL in Google Cloud Console.
+- Verify VNPAY return URL.
+- Run backend tests and frontend build before release.
+- Review startup logs after deployment.
+
+## Security Guidelines
+
+- Never commit real passwords, SMTP credentials, OAuth secrets, JWT secrets, payment secrets, or AI API keys.
+- Rotate any secret that was committed or shared.
+- Use a strong production `JWT_SECRET`.
+- Keep production database credentials outside source code.
+- Restrict OAuth redirect URLs to trusted domains only.
+- Keep CORS and `FRONTEND_URL` explicit per environment.
+- Avoid exposing raw SQL, stack traces, or internal exception details in API responses.
+
+## Development Standards
+
+Backend conventions:
+
+- Keep controllers thin and delegate business logic to services.
+- Use DTOs at API boundaries instead of exposing entities directly.
+- Keep persistence logic inside repositories.
+- Use service-level methods for transactional workflows.
+- Prefer explicit validation and meaningful domain errors.
+- Add tests for authentication, authorization, payment, order, and task workflows.
+
+Frontend conventions:
+
+- Keep route-level logic in `pages/`.
+- Keep shared UI in `components/`.
+- Keep API calls in `services/`.
+- Keep reusable types in `types/`.
+- Use environment variables for API URLs.
+- Avoid hardcoding production URLs or credentials.
+
+Branch and commit recommendations:
+
+- Use feature branches for new functionality.
+- Keep commits focused and reviewable.
+- Include tests or build verification for behavior changes.
+- Do not mix formatting-only changes with business logic changes unless intentional.
+
+## Maintenance Notes
+
+- `.legacy/` contains archived folders from the previous project layout. It is ignored by Git and should not be used for active development.
 - `data/` contains local H2 database files. Production should use PostgreSQL.
 - Runtime logs, build outputs, dependency folders, and generated files are ignored.
 - If frontend dependencies were cleaned, run `npm install` again inside `frontend/`.
@@ -374,5 +569,5 @@ Branch and commit recommendations:
 ## License
 
 No license has been declared yet. Add a license before distributing or publishing this repository.
-   
- 
+
+<!-- trigger deploy -->
