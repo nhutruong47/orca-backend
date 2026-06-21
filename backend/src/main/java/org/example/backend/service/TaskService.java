@@ -419,6 +419,7 @@ public class TaskService {
         dto.setProductionStage(t.getProductionStage());
         dto.setGoalId(t.getGoal() != null ? t.getGoal().getId().toString() : null);
         dto.setGoalTitle(t.getGoal() != null ? t.getGoal().getTitle() : null);
+        dto.setTeamId(t.getGoal() != null && t.getGoal().getTeam() != null ? t.getGoal().getTeam().getId().toString() : null);
         dto.setMemberId(t.getMember() != null ? t.getMember().getId().toString() : null);
         dto.setMemberName(t.getMember() != null ? t.getMember().getUsername() : null);
         dto.setBackupMemberId(t.getBackupMember() != null ? t.getBackupMember().getId().toString() : null);

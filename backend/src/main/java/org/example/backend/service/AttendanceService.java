@@ -1,6 +1,7 @@
 package org.example.backend.service;
 
 import org.example.backend.dto.AttendanceDTO;
+import org.example.backend.dto.UpdateAttendanceRequest;
 import org.example.backend.entity.Attendance;
 import org.example.backend.entity.Attendance.ShiftType;
 import org.example.backend.entity.ProductionOrder;
@@ -140,6 +141,46 @@ public class AttendanceService {
         return attendanceRepo.findByTeamIdAndDate(teamId, today).stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());
+    }
+
+    public List<AttendanceDTO> getTeamAttendanceHistory(UUID teamId) {
+        return attendanceRepo.findByTeamId(teamId).stream()
+                .sorted((a, b) -> b.getDate().compareTo(a.getDate()))
+                .map(this::toDTO)
+                .collect(Collectors.toList());
+    }
+
+    public AttendanceDTO updateAttendance(UUID attendanceId, UpdateAttendanceRequest req) {
+        Attendance a = attendanceRepo.findById(attendanceId)
+                .orElseThrow(() -> new RuntimeException("Attendance record not found"));
+        
+        if (req.getCheckInTime() != null) {
+            a.setCheckInTime(req.getCheckInTime());
+        }
+        if (req.getCheckOutTime() != null) {
+            a.setCheckOutTime(req.getCheckOutTime());
+        }
+
+        if (a.getCheckInTime() != null && a.getCheckOutTime() != null) {
+            Duration workDuration = Duration.between(a.getCheckInTime(), a.getCheckOutTime());
+            double totalMinutes = workDuration.toMinutes();
+            double breakMins = a.getBreakMinutes() != null ? a.getBreakMinutes() : 30;
+            double actualWorkMinutes = Math.max(0, totalMinutes - breakMins);
+            double actualWorkHours = Math.round(actualWorkMinutes / 60.0 * 10.0) / 10.0;
+            a.setActualWorkHours(actualWorkHours);
+
+            double regularHours = Math.min(actualWorkHours, 8.0);
+            double overtimeHours = Math.max(0, actualWorkHours - 8.0);
+            a.setRegularHours(Math.round(regularHours * 10.0) / 10.0);
+            a.setOvertimeHours(Math.round(overtimeHours * 10.0) / 10.0);
+        } else {
+            a.setActualWorkHours(0.0);
+            a.setRegularHours(0.0);
+            a.setOvertimeHours(0.0);
+        }
+
+        attendanceRepo.save(a);
+        return toDTO(a);
     }
 
     public Map<String, Double> getStageWorkerHours(UUID teamId, LocalDate date) {

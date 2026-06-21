@@ -25,6 +25,7 @@ public class TaskDTO {
     private String backupMemberId;
     private String backupMemberName;
     private LocalDateTime createdAt;
+    private String teamId;
 
     // === Getters & Setters ===
     public String getId() {
@@ -172,4 +173,7 @@ public class TaskDTO {
 
     public Double getHourlyRate() { return hourlyRate; }
     public void setHourlyRate(Double hourlyRate) { this.hourlyRate = hourlyRate; }
+
+    public String getTeamId() { return teamId; }
+    public void setTeamId(String teamId) { this.teamId = teamId; }
 }

@@ -1,6 +1,7 @@
 package org.example.backend.controller;
 
 import org.example.backend.dto.AttendanceDTO;
+import org.example.backend.dto.UpdateAttendanceRequest;
 import org.example.backend.entity.Attendance;
 import org.example.backend.service.AttendanceService;
 import org.springframework.http.ResponseEntity;
@@ -81,6 +82,20 @@ public class AttendanceController {
     @GetMapping("/team-today/{teamId}")
     public ResponseEntity<?> getTeamAttendanceToday(@PathVariable UUID teamId) {
         return ResponseEntity.ok(attendanceService.getTeamAttendanceToday(teamId));
+    }
+
+    @GetMapping("/team-history/{teamId}")
+    public ResponseEntity<?> getTeamAttendanceHistory(@PathVariable UUID teamId) {
+        return ResponseEntity.ok(attendanceService.getTeamAttendanceHistory(teamId));
+    }
+
+    @PutMapping("/update/{attendanceId}")
+    public ResponseEntity<?> updateAttendance(@PathVariable UUID attendanceId, @RequestBody UpdateAttendanceRequest req) {
+        try {
+            return ResponseEntity.ok(attendanceService.updateAttendance(attendanceId, req));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     @GetMapping("/stages")
