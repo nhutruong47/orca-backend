@@ -70,6 +70,16 @@ public class AuthController {
         Map<String, Object> status = new HashMap<>();
         status.put("aiTrialActive", user.isAiTrialActive());
         status.put("daysRemaining", user.getAiTrialDaysRemaining());
+        status.put("aiUsageCount", user.getAiUsageCount());
+        status.put("aiPlan", user.getAiPlan() != null ? user.getAiPlan() : "free");
+        
+        int maxUsage = 10;
+        if ("enterprise".equalsIgnoreCase(user.getAiPlan())) {
+            maxUsage = -1; // unlimited
+        } else if ("professional".equalsIgnoreCase(user.getAiPlan()) || "plus".equalsIgnoreCase(user.getAiPlan())) {
+            maxUsage = 100;
+        }
+        status.put("aiMaxUsage", maxUsage);
         return ResponseEntity.ok(status);
     }
 }

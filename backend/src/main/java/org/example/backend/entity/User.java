@@ -51,6 +51,9 @@ public class User implements UserDetails {
     @Column(name = "ai_plan_expires_at")
     private LocalDateTime aiPlanExpiresAt;
 
+    @Column(name = "ai_usage_count")
+    private Integer aiUsageCount = 0;
+
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();
@@ -60,11 +63,29 @@ public class User implements UserDetails {
     }
 
     public boolean isAiTrialActive() {
-        return true;
+        int usage = aiUsageCount != null ? aiUsageCount : 0;
+        if ("enterprise".equalsIgnoreCase(aiPlan)) {
+            return aiPlanExpiresAt != null && LocalDateTime.now().isBefore(aiPlanExpiresAt);
+        } else if ("professional".equalsIgnoreCase(aiPlan) || "plus".equalsIgnoreCase(aiPlan)) {
+            return usage < 100;
+        } else {
+            return usage < 10;
+        }
     }
 
     public long getAiTrialDaysRemaining() {
+        if ("enterprise".equalsIgnoreCase(aiPlan) && aiPlanExpiresAt != null) {
+            return java.time.temporal.ChronoUnit.DAYS.between(LocalDateTime.now(), aiPlanExpiresAt);
+        }
         return 999;
+    }
+
+    public Integer getAiUsageCount() {
+        return aiUsageCount != null ? aiUsageCount : 0;
+    }
+
+    public void setAiUsageCount(Integer aiUsageCount) {
+        this.aiUsageCount = aiUsageCount;
     }
 
     public User() {

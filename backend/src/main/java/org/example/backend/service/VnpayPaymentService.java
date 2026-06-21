@@ -601,7 +601,16 @@ public class VnpayPaymentService {
 
     private void activatePlan(User user, String planId) {
         user.setAiPlan(planId);
-        user.setAiPlanExpiresAt(LocalDateTime.now().plusMonths(1));
+        
+        if ("enterprise".equalsIgnoreCase(planId)) {
+            user.setAiPlanExpiresAt(LocalDateTime.now().plusDays(30));
+        } else if ("professional".equalsIgnoreCase(planId) || "plus".equalsIgnoreCase(planId)) {
+            user.setAiUsageCount(0); // Reset usages to 0 to give 100 new uses
+            user.setAiPlanExpiresAt(null); // Optional: if Plus doesn't expire by time
+        } else {
+            user.setAiPlanExpiresAt(LocalDateTime.now().plusMonths(1));
+        }
+        
         userRepository.save(user);
     }
 
