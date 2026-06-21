@@ -62,3 +62,14 @@ def revise(request: ReviseRequest) -> PlanDraftResponse:
         except GeminiReviseError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
     raise HTTPException(status_code=400, detail=f"Unsupported AI_V2_MODE: {settings.ai_v2_mode}")
+
+@app.get("/models")
+def list_models():
+    import httpx
+    url = "https://generativelanguage.googleapis.com/v1beta/models"
+    try:
+        resp = httpx.get(url, params={"key": settings.gemini_api_key}, timeout=10)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        return {"error": str(e)}
