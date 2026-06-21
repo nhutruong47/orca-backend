@@ -466,7 +466,7 @@ public class TaskService {
                 row.createCell(4).setCellValue(s.getRegularHours());
                 row.createCell(5).setCellValue(s.getOvertimeHours());
                 row.createCell(6).setCellValue(s.getHourlyRate());
-                double salary = (s.getRegularHours() * s.getHourlyRate())
+                double salary = (s.getRegularHours() > 0 ? s.getRegularHours() : s.getTotalWorkload()) * s.getHourlyRate()
                         + (s.getOvertimeHours() * s.getOvertimeRate());
                 totalSalary += salary;
                 row.createCell(7).setCellValue(salary);
@@ -486,8 +486,13 @@ public class TaskService {
     public Map<String, Object> payoutSalary(UUID teamId, UUID actorId) {
         List<SalaryDTO> report = getSalaryReport(teamId);
         double totalSalary = report.stream()
-                .mapToDouble(s -> (s.getRegularHours() * s.getHourlyRate())
-                        + (s.getOvertimeHours() * s.getOvertimeRate()))
+                .mapToDouble(s -> {
+                    // Use attendance hours if available, fallback to task workload (same as getSalaryReport)
+                    double billableRegular = s.getRegularHours() > 0 ? s.getRegularHours() : s.getTotalWorkload();
+                    double overtimeHours = s.getOvertimeHours() > 0 ? s.getOvertimeHours() : 0;
+                    return (billableRegular * s.getHourlyRate())
+                            + (overtimeHours * s.getOvertimeRate());
+                })
                 .sum();
         if (totalSalary <= 0) {
             throw new RuntimeException("Khong co luong de phat cho nhom nay.");
