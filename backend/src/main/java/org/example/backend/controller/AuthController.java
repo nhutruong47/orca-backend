@@ -68,7 +68,7 @@ public class AuthController {
     @GetMapping("/trial-status")
     public ResponseEntity<?> getTrialStatus(@AuthenticationPrincipal User user) {
         Map<String, Object> status = new HashMap<>();
-        status.put("aiTrialActive", user.isAiTrialActive());
+        status.put("aiTrialActive", true); // Bỏ chặn UI frontend
         status.put("daysRemaining", user.getAiTrialDaysRemaining());
         status.put("aiUsageCount", user.getAiUsageCount());
         status.put("aiPlan", user.getAiPlan() != null ? user.getAiPlan() : "free");

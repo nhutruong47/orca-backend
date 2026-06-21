@@ -27,12 +27,13 @@ public class AiWorkflowController {
     }
 
     private void enforceAndIncrementUsage(User user) {
-        if (!user.isAiTrialActive()) {
-            throw new org.springframework.web.server.ResponseStatusException(
-                    HttpStatus.PAYMENT_REQUIRED,
-                    "Bạn đã dùng hết lượt trải nghiệm AI. Vui lòng nâng cấp gói để tiếp tục sử dụng."
-            );
-        }
+        // Bỏ chặn giới hạn AI để có thể dùng thoải mái trong dự án
+        // if (!user.isAiTrialActive()) {
+        //     throw new org.springframework.web.server.ResponseStatusException(
+        //             HttpStatus.PAYMENT_REQUIRED,
+        //             "Bạn đã dùng hết lượt trải nghiệm AI. Vui lòng nâng cấp gói để tiếp tục sử dụng."
+        //     );
+        // }
         user.setAiUsageCount(user.getAiUsageCount() + 1);
         userRepository.save(user);
     }
