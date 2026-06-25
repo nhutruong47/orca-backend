@@ -54,7 +54,7 @@ public class User implements UserDetails {
     @Column(name = "ai_usage_count")
     private Integer aiUsageCount = 0;
 
-    @Column(name = "locked", nullable = false)
+    @Column(name = "locked", nullable = false, columnDefinition = "boolean default false")
     private boolean locked = false;
 
     @PrePersist
