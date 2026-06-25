@@ -22,6 +22,11 @@ public class InventoryController {
         return ResponseEntity.ok(inventoryService.getByTeam(teamId));
     }
 
+    @GetMapping("/featured")
+    public ResponseEntity<List<InventoryItemDTO>> getFeaturedProducts() {
+        return ResponseEntity.ok(inventoryService.getFeaturedProducts());
+    }
+
     @PostMapping
     public ResponseEntity<?> create(@RequestBody InventoryItemDTO dto) {
         try {

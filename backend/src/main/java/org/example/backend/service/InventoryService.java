@@ -29,6 +29,11 @@ public class InventoryService {
                 .stream().map(this::toDTO).collect(Collectors.toList());
     }
 
+    public List<InventoryItemDTO> getFeaturedProducts() {
+        return inventoryRepo.findByIsFeaturedTrue()
+                .stream().map(this::toDTO).collect(Collectors.toList());
+    }
+
     /** Get inventory grouped by product type for dashboard display */
     public Map<String, Map<String, Double>> getInventoryMatrix(UUID teamId) {
         List<InventoryItem> items = inventoryRepo.findByTeamIdOrderByProductTypeAscProductStateAsc(teamId);
@@ -176,6 +181,17 @@ public class InventoryService {
         dto.setLowStockThreshold(i.getLowStockThreshold());
         dto.setStatus(i.getStockStatus());
         dto.setLastUpdated(i.getLastUpdated());
+
+        // Featured fields
+        dto.setPrice(i.getPrice());
+        dto.setDescription(i.getDescription());
+        dto.setImageUrl(i.getImageUrl());
+        dto.setOrigin(i.getOrigin());
+        dto.setRoastLevel(i.getRoastLevel());
+        dto.setProcessing(i.getProcessing());
+        dto.setTasteNotes(i.getTasteNotes());
+        dto.setIsFeatured(i.getIsFeatured());
+
         return dto;
     }
 }

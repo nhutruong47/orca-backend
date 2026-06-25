@@ -1,6 +1,11 @@
 package org.example.backend.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Max;
+
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -15,14 +20,17 @@ public class Task {
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "goal_id", nullable = false)
+    @OnDelete(action = OnDeleteAction.CASCADE)
     private Goal goal;
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "member_id")
+    @OnDelete(action = OnDeleteAction.CASCADE)
     private User member;
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "backup_member_id")
+    @OnDelete(action = OnDeleteAction.CASCADE)
     private User backupMember;
 
     @Column(nullable = false, length = 500)
@@ -31,6 +39,8 @@ public class Task {
     @Column(columnDefinition = "TEXT")
     private String description;
 
+    @Min(1)
+    @Max(5)
     private Integer priority = 1; // 1-5
 
     @Column(nullable = false)
@@ -43,17 +53,23 @@ public class Task {
     @Column(name = "hourly_rate")
     private Double hourlyRate; // đơn giá mỗi giờ/đơn vị công
 
+    @Min(0)
     private Double workload; // estimated workload (hours or units)
 
+    @Min(0)
     @Column(name = "actual_workload")
     private Double actualWorkload; // actual workload reported by member
 
+    @Min(0)
+    @Max(100)
     @Column(name = "completion_percentage")
     private Integer completionPercentage = 0; // 0-100
 
+    @Min(0)
     @Column(name = "output_target")
     private Double outputTarget;
 
+    @Min(0)
     @Column(name = "actual_output")
     private Double actualOutput;
 

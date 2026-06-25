@@ -97,6 +97,33 @@ public class ProductionOrder {
     @Column(name = "completed_quantity")
     private Double completedQuantity;
 
+    @Column(name = "contact_phone_alt", length = 20)
+    private String contactPhoneAlt;
+
+    @Column(name = "delivery_address")
+    private String deliveryAddress;
+
+    @Column(name = "preferred_delivery_from")
+    private LocalDateTime preferredDeliveryFrom;
+
+    @Column(name = "preferred_delivery_to")
+    private LocalDateTime preferredDeliveryTo;
+
+    @Column(name = "delivery_failure_action", length = 30)
+    private String deliveryFailureAction;
+
+    @Column(name = "delivery_note", columnDefinition = "TEXT")
+    private String deliveryNote;
+
+    @Column(name = "cancel_requested")
+    private Boolean cancelRequested = false;
+
+    @Column(name = "buyer_viewed")
+    private Boolean buyerViewed = true;
+
+    @Column(name = "seller_viewed")
+    private Boolean sellerViewed = false;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -192,6 +219,25 @@ public class ProductionOrder {
     public void setCompletedQuantity(Double completedQuantity) { this.completedQuantity = completedQuantity; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
+
+    public String getContactPhoneAlt() { return contactPhoneAlt; }
+    public void setContactPhoneAlt(String contactPhoneAlt) { this.contactPhoneAlt = contactPhoneAlt; }
+    public String getDeliveryAddress() { return deliveryAddress; }
+    public void setDeliveryAddress(String deliveryAddress) { this.deliveryAddress = deliveryAddress; }
+    public LocalDateTime getPreferredDeliveryFrom() { return preferredDeliveryFrom; }
+    public void setPreferredDeliveryFrom(LocalDateTime preferredDeliveryFrom) { this.preferredDeliveryFrom = preferredDeliveryFrom; }
+    public LocalDateTime getPreferredDeliveryTo() { return preferredDeliveryTo; }
+    public void setPreferredDeliveryTo(LocalDateTime preferredDeliveryTo) { this.preferredDeliveryTo = preferredDeliveryTo; }
+    public String getDeliveryFailureAction() { return deliveryFailureAction; }
+    public void setDeliveryFailureAction(String deliveryFailureAction) { this.deliveryFailureAction = deliveryFailureAction; }
+    public String getDeliveryNote() { return deliveryNote; }
+    public void setDeliveryNote(String deliveryNote) { this.deliveryNote = deliveryNote; }
+    public Boolean getCancelRequested() { return cancelRequested; }
+    public void setCancelRequested(Boolean cancelRequested) { this.cancelRequested = cancelRequested; }
+    public Boolean getBuyerViewed() { return buyerViewed; }
+    public void setBuyerViewed(Boolean buyerViewed) { this.buyerViewed = buyerViewed; }
+    public Boolean getSellerViewed() { return sellerViewed; }
+    public void setSellerViewed(Boolean sellerViewed) { this.sellerViewed = sellerViewed; }
 
     public double getProgressPercent() {
         if (outputTarget == null || outputTarget == 0) return 0;

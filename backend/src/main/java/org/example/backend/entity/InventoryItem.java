@@ -35,6 +35,31 @@ public class InventoryItem {
     @Column(name = "low_stock_threshold")
     private Double lowStockThreshold = 100.0;
 
+    // Featured Product fields
+    @Column(name = "price")
+    private String price;
+
+    @Column(columnDefinition = "TEXT")
+    private String description;
+
+    @Column(name = "image_url", columnDefinition = "TEXT")
+    private String imageUrl;
+
+    @Column(name = "origin")
+    private String origin;
+
+    @Column(name = "roast_level")
+    private String roastLevel;
+
+    @Column(name = "processing")
+    private String processing;
+
+    @Column(name = "taste_notes", columnDefinition = "TEXT")
+    private String tasteNotes;
+
+    @Column(name = "is_featured")
+    private Boolean isFeatured = false;
+
     @Column(name = "last_updated", nullable = false)
     private LocalDateTime lastUpdated;
 
@@ -91,5 +116,69 @@ public class InventoryItem {
     @Transient
     public String getName() {
         return getDisplayName();
+    }
+
+    public String getPrice() {
+        return price;
+    }
+
+    public void setPrice(String price) {
+        this.price = price;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public String getImageUrl() {
+        return imageUrl;
+    }
+
+    public void setImageUrl(String imageUrl) {
+        this.imageUrl = imageUrl;
+    }
+
+    public String getOrigin() {
+        return origin;
+    }
+
+    public void setOrigin(String origin) {
+        this.origin = origin;
+    }
+
+    public String getRoastLevel() {
+        return roastLevel;
+    }
+
+    public void setRoastLevel(String roastLevel) {
+        this.roastLevel = roastLevel;
+    }
+
+    public String getProcessing() {
+        return processing;
+    }
+
+    public void setProcessing(String processing) {
+        this.processing = processing;
+    }
+
+    public String getTasteNotes() {
+        return tasteNotes;
+    }
+
+    public void setTasteNotes(String tasteNotes) {
+        this.tasteNotes = tasteNotes;
+    }
+
+    public Boolean getIsFeatured() {
+        return isFeatured;
+    }
+
+    public void setIsFeatured(Boolean featured) {
+        isFeatured = featured;
     }
 }

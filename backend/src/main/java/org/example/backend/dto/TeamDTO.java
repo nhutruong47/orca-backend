@@ -40,6 +40,17 @@ public class TeamDTO {
     private int totalOrders;
     private int trustScore;
 
+    // Additional Factory Info
+    private String moq;
+    private String leadTime;
+    private Integer yearsInOperation;
+    private String statusBadge;
+    private Integer employeeCount;
+    private String factorySize;
+    private String metadata;
+    private Double rating;
+    private Integer reviewCount;
+
     public static class MemberInfo {
         private UUID userId;
         private String username;
@@ -364,5 +375,77 @@ public class TeamDTO {
 
     public void setInviteCode(String inviteCode) {
         this.inviteCode = inviteCode;
+    }
+
+    public String getMoq() {
+        return moq;
+    }
+
+    public void setMoq(String moq) {
+        this.moq = moq;
+    }
+
+    public String getLeadTime() {
+        return leadTime;
+    }
+
+    public void setLeadTime(String leadTime) {
+        this.leadTime = leadTime;
+    }
+
+    public Integer getYearsInOperation() {
+        return yearsInOperation;
+    }
+
+    public void setYearsInOperation(Integer yearsInOperation) {
+        this.yearsInOperation = yearsInOperation;
+    }
+
+    public String getStatusBadge() {
+        return statusBadge;
+    }
+
+    public void setStatusBadge(String statusBadge) {
+        this.statusBadge = statusBadge;
+    }
+
+    public Integer getEmployeeCount() {
+        return employeeCount;
+    }
+
+    public void setEmployeeCount(Integer employeeCount) {
+        this.employeeCount = employeeCount;
+    }
+
+    public String getFactorySize() {
+        return factorySize;
+    }
+
+    public void setFactorySize(String factorySize) {
+        this.factorySize = factorySize;
+    }
+
+    public String getMetadata() {
+        return metadata;
+    }
+
+    public void setMetadata(String metadata) {
+        this.metadata = metadata;
+    }
+
+    public Double getRating() {
+        return rating;
+    }
+
+    public void setRating(Double rating) {
+        this.rating = rating;
+    }
+
+    public Integer getReviewCount() {
+        return reviewCount;
+    }
+
+    public void setReviewCount(Integer reviewCount) {
+        this.reviewCount = reviewCount;
     }
 }

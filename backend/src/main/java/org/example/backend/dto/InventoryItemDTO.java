@@ -14,6 +14,16 @@ public class InventoryItemDTO {
     private String status;
     private LocalDateTime lastUpdated;
 
+    // Featured Product fields
+    private String price;
+    private String description;
+    private String imageUrl;
+    private String origin;
+    private String roastLevel;
+    private String processing;
+    private String tasteNotes;
+    private Boolean isFeatured;
+
     // Keep backward compat
     private String name;
 
@@ -49,4 +59,28 @@ public class InventoryItemDTO {
 
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
+
+    public String getPrice() { return price; }
+    public void setPrice(String price) { this.price = price; }
+
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
+
+    public String getImageUrl() { return imageUrl; }
+    public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
+
+    public String getOrigin() { return origin; }
+    public void setOrigin(String origin) { this.origin = origin; }
+
+    public String getRoastLevel() { return roastLevel; }
+    public void setRoastLevel(String roastLevel) { this.roastLevel = roastLevel; }
+
+    public String getProcessing() { return processing; }
+    public void setProcessing(String processing) { this.processing = processing; }
+
+    public String getTasteNotes() { return tasteNotes; }
+    public void setTasteNotes(String tasteNotes) { this.tasteNotes = tasteNotes; }
+
+    public Boolean getIsFeatured() { return isFeatured; }
+    public void setIsFeatured(Boolean isFeatured) { this.isFeatured = isFeatured; }
 }

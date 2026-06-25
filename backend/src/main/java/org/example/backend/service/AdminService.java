@@ -18,8 +18,13 @@ import org.example.backend.repository.TaskRepository;
 import org.example.backend.repository.TeamMemberRepository;
 import org.example.backend.repository.TeamRepository;
 import org.example.backend.repository.UserRepository;
+import org.example.backend.entity.SubscriptionPlan;
+import org.example.backend.entity.AiConfig;
+import org.example.backend.repository.SubscriptionPlanRepository;
+import org.example.backend.repository.AiConfigRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -31,6 +36,8 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
+import jakarta.annotation.PostConstruct;
 
 @Service
 public class AdminService {
@@ -45,6 +52,9 @@ public class AdminService {
     private final ProductionBatchRepository productionBatchRepository;
     private final PaymentTransactionRepository paymentRepository;
     private final TaskService taskService;
+    private final PasswordEncoder passwordEncoder;
+    private final SubscriptionPlanRepository planRepository;
+    private final AiConfigRepository aiConfigRepository;
 
     public AdminService(
             UserRepository userRepository,
@@ -56,7 +66,10 @@ public class AdminService {
             ProductionOrderRepository productionOrderRepository,
             ProductionBatchRepository productionBatchRepository,
             PaymentTransactionRepository paymentRepository,
-            TaskService taskService) {
+            TaskService taskService,
+            PasswordEncoder passwordEncoder,
+            SubscriptionPlanRepository planRepository,
+            AiConfigRepository aiConfigRepository) {
         this.userRepository = userRepository;
         this.teamRepository = teamRepository;
         this.teamMemberRepository = teamMemberRepository;
@@ -67,6 +80,49 @@ public class AdminService {
         this.productionBatchRepository = productionBatchRepository;
         this.paymentRepository = paymentRepository;
         this.taskService = taskService;
+        this.passwordEncoder = passwordEncoder;
+        this.planRepository = planRepository;
+        this.aiConfigRepository = aiConfigRepository;
+    }
+
+    @PostConstruct
+    public void seedDefaultPlans() {
+        if (planRepository.count() == 0) {
+            SubscriptionPlan basic = new SubscriptionPlan();
+            basic.setName("Cơ bản");
+            basic.setPrice(499000.0);
+            basic.setPeriod("Tháng");
+            basic.setMaxUsers(5);
+            basic.setMaxOrders(100);
+            basic.setMaxBatches(300);
+            basic.setMaxWorkshops(1);
+            basic.setAiLimit(5000);
+            basic.setFeatures("Bảng đơn hàng,Theo dõi lô sản xuất,Báo cáo cơ bản");
+            
+            SubscriptionPlan growth = new SubscriptionPlan();
+            growth.setName("Tăng trưởng");
+            growth.setPrice(1499000.0);
+            growth.setPeriod("Tháng");
+            growth.setMaxUsers(30);
+            growth.setMaxOrders(1000);
+            growth.setMaxBatches(5000);
+            growth.setMaxWorkshops(5);
+            growth.setAiLimit(40000);
+            growth.setFeatures("Quy trình QC,Trợ lý AI,Xuất dữ liệu thanh toán");
+
+            SubscriptionPlan enterprise = new SubscriptionPlan();
+            enterprise.setName("Doanh nghiệp");
+            enterprise.setPrice(0.0);
+            enterprise.setPeriod("Năm");
+            enterprise.setMaxUsers(500);
+            enterprise.setMaxOrders(99999);
+            enterprise.setMaxBatches(99999);
+            enterprise.setMaxWorkshops(50);
+            enterprise.setAiLimit(500000);
+            enterprise.setFeatures("Cam kết dịch vụ,Quy trình tùy chỉnh,Giới hạn AI riêng");
+
+            planRepository.saveAll(List.of(basic, growth, enterprise));
+        }
     }
 
     public Map<String, Object> getOverview() {
@@ -252,6 +308,74 @@ public class AdminService {
     }
 
     @Transactional
+    public Map<String, Object> updateUserLock(UUID userId, boolean locked, User currentUser) {
+        User target = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (target.getId().equals(currentUser.getId()) && locked) {
+            throw new RuntimeException("You cannot lock your own account");
+        }
+
+        target.setLocked(locked);
+        return toUserMap(userRepository.save(target));
+    }
+
+    @Transactional
+    public Map<String, Object> createUser(Map<String, String> details) {
+        if (userRepository.findByUsername(details.get("username")).isPresent()) {
+            throw new RuntimeException("Username already exists");
+        }
+        User user = new User();
+        user.setUsername(details.get("username"));
+        user.setEmail(details.get("email"));
+        user.setFullName(details.get("fullName"));
+        String rawPassword = details.getOrDefault("password", "123456");
+        user.setPassword(passwordEncoder.encode(rawPassword));
+        user.setRole(Role.valueOf(safeText(details.get("role"), "USER").toUpperCase(Locale.ROOT)));
+        user.setAiPlan("free");
+        return toUserMap(userRepository.save(user));
+    }
+
+    @Transactional
+    public Map<String, Object> updateUser(UUID userId, Map<String, String> details) {
+        User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
+        if (details.containsKey("fullName")) user.setFullName(details.get("fullName"));
+        if (details.containsKey("email")) user.setEmail(details.get("email"));
+        if (details.containsKey("role")) {
+            user.setRole(Role.valueOf(details.get("role").toUpperCase(Locale.ROOT)));
+        }
+        return toUserMap(userRepository.save(user));
+    }
+
+    @Transactional
+    public String resetUserPassword(UUID userId) {
+        User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
+        String newPassword = UUID.randomUUID().toString().substring(0, 8);
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+        return newPassword;
+    }
+
+    @Transactional
+    public Map<String, Object> updateTeam(UUID teamId, Map<String, String> details) {
+        Team team = teamRepository.findById(teamId).orElseThrow(() -> new RuntimeException("Team not found"));
+        if (details.containsKey("name")) team.setName(details.get("name"));
+        if (details.containsKey("description")) team.setDescription(details.get("description"));
+        if (details.containsKey("specialty")) team.setSpecialty(details.get("specialty"));
+        if (details.containsKey("capacity")) team.setCapacity(details.get("capacity"));
+        if (details.containsKey("region")) team.setRegion(details.get("region"));
+        return toTeamMap(teamRepository.save(team));
+    }
+
+    @Transactional
+    public void deleteTeam(UUID teamId) {
+        Team team = teamRepository.findById(teamId).orElseThrow(() -> new RuntimeException("Team not found"));
+        // Mark as deleted or locked instead of hard delete to avoid foreign key issues
+        team.setPublished(false);
+        teamRepository.save(team);
+    }
+
+    @Transactional
     public Map<String, Object> updateTeamPublication(UUID teamId, boolean published) {
         Team team = teamRepository.findById(teamId)
                 .orElseThrow(() -> new RuntimeException("Team not found"));
@@ -293,6 +417,49 @@ public class AdminService {
         return toTaskMap(task);
     }
 
+    public List<SubscriptionPlan> getPlans() {
+        return planRepository.findAll();
+    }
+
+    @Transactional
+    public SubscriptionPlan createPlan(SubscriptionPlan plan) {
+        return planRepository.save(plan);
+    }
+
+    @Transactional
+    public SubscriptionPlan updatePlan(UUID id, SubscriptionPlan details) {
+        SubscriptionPlan plan = planRepository.findById(id).orElseThrow(() -> new RuntimeException("Plan not found"));
+        plan.setName(details.getName());
+        plan.setPrice(details.getPrice());
+        plan.setPeriod(details.getPeriod());
+        plan.setMaxUsers(details.getMaxUsers());
+        plan.setMaxOrders(details.getMaxOrders());
+        plan.setMaxBatches(details.getMaxBatches());
+        plan.setMaxWorkshops(details.getMaxWorkshops());
+        plan.setAiLimit(details.getAiLimit());
+        plan.setFeatures(details.getFeatures());
+        return planRepository.save(plan);
+    }
+
+    @Transactional
+    public void deletePlan(UUID id) {
+        planRepository.deleteById(id);
+    }
+
+    public Map<String, String> getAiConfigs() {
+        return aiConfigRepository.findAll().stream()
+                .collect(Collectors.toMap(AiConfig::getConfigKey, AiConfig::getConfigValue));
+    }
+
+    @Transactional
+    public void updateAiConfigs(Map<String, String> configs) {
+        configs.forEach((key, value) -> {
+            AiConfig config = aiConfigRepository.findById(key).orElse(new AiConfig(key, value));
+            config.setConfigValue(value);
+            aiConfigRepository.save(config);
+        });
+    }
+
     private <T> Map<String, Long> countByStatus(List<T> items, Function<T, String> statusGetter) {
         return items.stream()
                 .collect(Collectors.groupingBy(
@@ -310,6 +477,7 @@ public class AdminService {
         map.put("role", user.getRole().name());
         map.put("chipId", safeText(user.getChipId(), ""));
         map.put("aiPlan", safeText(user.getAiPlan(), "free"));
+        map.put("status", user.isLocked() ? "Locked" : "Active");
         map.put("aiPlanExpiresAt", user.getAiPlanExpiresAt() != null ? user.getAiPlanExpiresAt().toString() : null);
         map.put("createdAt", user.getCreatedAt() != null ? user.getCreatedAt().toString() : null);
         return map;

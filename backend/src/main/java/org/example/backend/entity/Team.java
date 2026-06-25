@@ -1,6 +1,7 @@
 package org.example.backend.entity;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Min;
 import java.time.LocalDateTime;
 import java.util.Random;
 import java.util.UUID;
@@ -70,29 +71,64 @@ public class Team {
     @Column(name = "verification_reject_reason", length = 1000)
     private String verificationRejectReason;
 
+    @Min(0)
     @Column(name = "completed_orders", nullable = false, columnDefinition = "integer default 0")
     private int completedOrders = 0;
 
+    @Min(0)
     @Column(name = "cancelled_orders", nullable = false, columnDefinition = "integer default 0")
     private int cancelledOrders = 0;
 
+    @Min(0)
     @Column(name = "total_orders", nullable = false, columnDefinition = "integer default 0")
     private int totalOrders = 0;
 
+    @Min(0)
     @Column(name = "on_time_orders", nullable = false, columnDefinition = "integer default 0")
     private int onTimeOrders = 0;
 
+    @Min(0)
     @Column(name = "late_orders", nullable = false, columnDefinition = "integer default 0")
     private int lateOrders = 0;
 
+    @Min(0)
     @Column(name = "total_ratings", nullable = false, columnDefinition = "integer default 0")
     private int totalRatings = 0;
 
+    @Min(0)
     @Column(name = "sum_ratings", nullable = false, columnDefinition = "double precision default 0.0")
     private double sumRatings = 0.0;
 
     @Column(name = "invite_code", unique = true, length = 6)
     private String inviteCode;
+
+    // Detailed Factory Information
+    @Column(name = "moq", length = 100)
+    private String moq;
+
+    @Column(name = "lead_time", length = 100)
+    private String leadTime;
+
+    @Column(name = "years_in_operation")
+    private Integer yearsInOperation;
+
+    @Column(name = "status_badge", length = 100)
+    private String statusBadge;
+
+    @Column(name = "employee_count")
+    private Integer employeeCount;
+
+    @Column(name = "factory_size", length = 100)
+    private String factorySize;
+
+    @Column(columnDefinition = "TEXT")
+    private String metadata;
+
+    @Column(name = "rating")
+    private Double rating;
+
+    @Column(name = "review_count")
+    private Integer reviewCount;
 
     @PrePersist
     protected void onCreate() {
@@ -349,5 +385,77 @@ public class Team {
 
     public void setInviteCode(String inviteCode) {
         this.inviteCode = inviteCode;
+    }
+
+    public String getMoq() {
+        return moq;
+    }
+
+    public void setMoq(String moq) {
+        this.moq = moq;
+    }
+
+    public String getLeadTime() {
+        return leadTime;
+    }
+
+    public void setLeadTime(String leadTime) {
+        this.leadTime = leadTime;
+    }
+
+    public Integer getYearsInOperation() {
+        return yearsInOperation;
+    }
+
+    public void setYearsInOperation(Integer yearsInOperation) {
+        this.yearsInOperation = yearsInOperation;
+    }
+
+    public String getStatusBadge() {
+        return statusBadge;
+    }
+
+    public void setStatusBadge(String statusBadge) {
+        this.statusBadge = statusBadge;
+    }
+
+    public Integer getEmployeeCount() {
+        return employeeCount;
+    }
+
+    public void setEmployeeCount(Integer employeeCount) {
+        this.employeeCount = employeeCount;
+    }
+
+    public String getFactorySize() {
+        return factorySize;
+    }
+
+    public void setFactorySize(String factorySize) {
+        this.factorySize = factorySize;
+    }
+
+    public String getMetadata() {
+        return metadata;
+    }
+
+    public void setMetadata(String metadata) {
+        this.metadata = metadata;
+    }
+
+    public Double getRating() {
+        return rating;
+    }
+
+    public void setRating(Double rating) {
+        this.rating = rating;
+    }
+
+    public Integer getReviewCount() {
+        return reviewCount;
+    }
+
+    public void setReviewCount(Integer reviewCount) {
+        this.reviewCount = reviewCount;
     }
 }

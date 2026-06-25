@@ -1,6 +1,11 @@
 package org.example.backend.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Max;
+
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -15,10 +20,12 @@ public class Goal {
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "team_id", nullable = false)
+    @OnDelete(action = OnDeleteAction.CASCADE)
     private Team team;
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "owner_id", nullable = false)
+    @OnDelete(action = OnDeleteAction.CASCADE)
     private User owner; // Group Owner who created this goal
 
     @Column(nullable = false, length = 500)
@@ -33,6 +40,8 @@ public class Goal {
     @Column(name = "ai_parsed_data", columnDefinition = "TEXT")
     private String aiParsedData;
 
+    @Min(1)
+    @Max(5)
     private Integer priority = 1;
 
     @Column(nullable = false)
@@ -40,9 +49,11 @@ public class Goal {
 
     private LocalDateTime deadline;
 
+    @Min(0)
     @Column(name = "total_tasks")
     private Integer totalTasks = 0;
 
+    @Min(0)
     @Column(name = "completed_tasks")
     private Integer completedTasks = 0;
 

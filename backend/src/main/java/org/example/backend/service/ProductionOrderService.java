@@ -114,6 +114,16 @@ public class ProductionOrderService {
         order.setRecipientName(raw.getRecipientName());
         order.setRecipientPhone(raw.getRecipientPhone());
         order.setShippingNote(raw.getShippingNote());
+        
+        order.setContactPhoneAlt(raw.getContactPhoneAlt());
+        order.setDeliveryAddress(raw.getDeliveryAddress());
+        order.setPreferredDeliveryFrom(raw.getPreferredDeliveryFrom());
+        order.setPreferredDeliveryTo(raw.getPreferredDeliveryTo());
+        order.setDeliveryFailureAction(raw.getDeliveryFailureAction());
+        order.setDeliveryNote(raw.getDeliveryNote());
+        if (raw.getCancelRequested() != null) order.setCancelRequested(raw.getCancelRequested());
+        if (raw.getBuyerViewed() != null) order.setBuyerViewed(raw.getBuyerViewed());
+        if (raw.getSellerViewed() != null) order.setSellerViewed(raw.getSellerViewed());
     }
 
     private void validateOrder(ProductionOrder order) {
@@ -182,6 +192,17 @@ public class ProductionOrderService {
         dto.setRecipientName(o.getRecipientName());
         dto.setRecipientPhone(o.getRecipientPhone());
         dto.setShippingNote(o.getShippingNote());
+        
+        dto.setContactPhoneAlt(o.getContactPhoneAlt());
+        dto.setDeliveryAddress(o.getDeliveryAddress());
+        dto.setPreferredDeliveryFrom(o.getPreferredDeliveryFrom());
+        dto.setPreferredDeliveryTo(o.getPreferredDeliveryTo());
+        dto.setDeliveryFailureAction(o.getDeliveryFailureAction());
+        dto.setDeliveryNote(o.getDeliveryNote());
+        dto.setCancelRequested(o.getCancelRequested());
+        dto.setBuyerViewed(o.getBuyerViewed());
+        dto.setSellerViewed(o.getSellerViewed());
+
         dto.setStatus(o.getStatus());
         dto.setCompletedQuantity(o.getCompletedQuantity());
         dto.setProgressPercent(o.getProgressPercent());

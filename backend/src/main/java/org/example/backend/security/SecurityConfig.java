@@ -67,7 +67,8 @@ public class SecurityConfig {
                         .authenticationEntryPoint(new org.springframework.security.web.authentication.HttpStatusEntryPoint(org.springframework.http.HttpStatus.UNAUTHORIZED)))
 
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/api/auth/login", "/api/auth/register").permitAll()
+                        .requestMatchers("/api/auth/**").authenticated()
                         .requestMatchers(
                                 "/api/payments/vnpay/return",
                                 "/api/payments/vnpay/ipn",
@@ -75,6 +76,7 @@ public class SecurityConfig {
                                 "/api/payments/momo/ipn").permitAll()
                         .requestMatchers("/api/debug/**").permitAll()
                         .requestMatchers("/api/teams/all").permitAll()
+                        .requestMatchers("/uploads/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
                         .requestMatchers("/ws/**").permitAll()

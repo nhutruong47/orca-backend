@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
+import org.example.backend.repository.UserRepository;
 
 @RestController
 @RequestMapping("/api/ai")
@@ -15,10 +16,12 @@ public class AiController {
 
     private final AiServiceClient aiServiceClient;
     private final TeamMemberRepository teamMemberRepo;
+    private final UserRepository userRepository;
 
-    public AiController(AiServiceClient aiServiceClient, TeamMemberRepository teamMemberRepo) {
+    public AiController(AiServiceClient aiServiceClient, TeamMemberRepository teamMemberRepo, UserRepository userRepository) {
         this.aiServiceClient = aiServiceClient;
         this.teamMemberRepo = teamMemberRepo;
+        this.userRepository = userRepository;
     }
 
     /**
@@ -26,7 +29,16 @@ public class AiController {
      * Giờ sẽ gửi kèm danh sách thành viên + nhãn dán để AI giao việc ngay.
      */
     @PostMapping("/parse")
-    public ResponseEntity<AiParseResult> parseText(@RequestBody Map<String, String> payload) {
+    public ResponseEntity<AiParseResult> parseText(@RequestBody Map<String, String> payload, @org.springframework.security.core.annotation.AuthenticationPrincipal org.example.backend.entity.User user) {
+        if (!user.isAiTrialActive()) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.PAYMENT_REQUIRED,
+                    "Hết hạn gói miễn phí. Bạn cần nâng cấp gói để sử dụng tốt hơn."
+            );
+        }
+        user.setAiUsageCount(user.getAiUsageCount() + 1);
+        userRepository.save(user);
+
         System.out.println("DEBUG AiController - parseText called with: " + payload);
         String text = payload.getOrDefault("text", "");
         String teamIdStr = payload.get("teamId");

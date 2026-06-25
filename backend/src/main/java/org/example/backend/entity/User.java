@@ -54,6 +54,9 @@ public class User implements UserDetails {
     @Column(name = "ai_usage_count")
     private Integer aiUsageCount = 0;
 
+    @Column(name = "locked", nullable = false)
+    private boolean locked = false;
+
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();
@@ -88,6 +91,14 @@ public class User implements UserDetails {
         this.aiUsageCount = aiUsageCount;
     }
 
+    public boolean isLocked() {
+        return locked;
+    }
+
+    public void setLocked(boolean locked) {
+        this.locked = locked;
+    }
+
     public User() {
     }
 
@@ -104,6 +115,7 @@ public class User implements UserDetails {
         private String email;
         private Role role = Role.MEMBER;
         private String chipId;
+        private boolean locked = false;
 
         public UserBuilder id(UUID id) {
             this.id = id;
@@ -140,6 +152,11 @@ public class User implements UserDetails {
             return this;
         }
 
+        public UserBuilder locked(boolean locked) {
+            this.locked = locked;
+            return this;
+        }
+
         public User build() {
             User user = new User();
             user.id = this.id;
@@ -149,6 +166,7 @@ public class User implements UserDetails {
             user.email = this.email;
             user.role = this.role;
             user.chipId = this.chipId;
+            user.locked = this.locked;
             return user;
         }
     }
@@ -261,7 +279,7 @@ public class User implements UserDetails {
 
     @Override
     public boolean isAccountNonLocked() {
-        return true;
+        return !locked;
     }
 
     @Override

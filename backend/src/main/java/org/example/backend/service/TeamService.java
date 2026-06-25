@@ -366,6 +366,17 @@ public class TeamService {
                 : 0;
         dto.setTrustScore(trust);
 
+        // Detailed Factory Information
+        dto.setMoq(team.getMoq());
+        dto.setLeadTime(team.getLeadTime());
+        dto.setYearsInOperation(team.getYearsInOperation());
+        dto.setStatusBadge(team.getStatusBadge());
+        dto.setEmployeeCount(team.getEmployeeCount());
+        dto.setFactorySize(team.getFactorySize());
+        dto.setMetadata(team.getMetadata());
+        dto.setRating(team.getRating());
+        dto.setReviewCount(team.getReviewCount());
+
         List<TeamMember> members = teamMemberRepository.findByTeamId(team.getId());
         dto.setMemberCount(members.size());
 

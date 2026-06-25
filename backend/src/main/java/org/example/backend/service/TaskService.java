@@ -172,6 +172,17 @@ public class TaskService {
     public TaskDTO assign(UUID id, UUID memberId) {
         Task t = taskRepo.findById(id).orElseThrow(() -> new RuntimeException("Task not found"));
         User member = userRepo.findById(memberId).orElseThrow(() -> new RuntimeException("User not found"));
+        
+        // Validate if member is in the team
+        if (t.getGoal() != null && t.getGoal().getTeam() != null) {
+            UUID teamId = t.getGoal().getTeam().getId();
+            boolean isMember = teamMemberRepo.findByTeamId(teamId).stream()
+                .anyMatch(tm -> tm.getUser().getId().equals(memberId));
+            if (!isMember) {
+                throw new RuntimeException("Người dùng không thuộc xưởng này. Không thể giao việc.");
+            }
+        }
+
         t.setMember(member);
         t.setAcceptanceStatus("WAITING");
         Task saved = taskRepo.save(t);
@@ -390,11 +401,17 @@ public class TaskService {
     private void updateGoalProgress(UUID goalId) {
         List<Task> tasks = taskRepo.findByGoalId(goalId);
         long completed = tasks.stream().filter(t -> "COMPLETED".equals(t.getStatus())).count();
+        long inProgress = tasks.stream().filter(t -> "IN_PROGRESS".equals(t.getStatus())).count();
+
         goalRepo.findById(goalId).ifPresent(g -> {
             g.setTotalTasks(tasks.size());
             g.setCompletedTasks((int) completed);
             if (completed == tasks.size() && !tasks.isEmpty()) {
                 g.setStatus("DONE");
+            } else if (completed > 0 || inProgress > 0) {
+                g.setStatus("IN_PROGRESS");
+            } else {
+                g.setStatus("PENDING");
             }
             goalRepo.save(g);
         });
@@ -431,6 +448,17 @@ public class TaskService {
     public TaskDTO setBackup(UUID id, UUID memberId) {
         Task t = taskRepo.findById(id).orElseThrow(() -> new RuntimeException("Task not found"));
         User member = userRepo.findById(memberId).orElseThrow(() -> new RuntimeException("User not found"));
+        
+        // Validate if member is in the team
+        if (t.getGoal() != null && t.getGoal().getTeam() != null) {
+            UUID teamId = t.getGoal().getTeam().getId();
+            boolean isMember = teamMemberRepo.findByTeamId(teamId).stream()
+                .anyMatch(tm -> tm.getUser().getId().equals(memberId));
+            if (!isMember) {
+                throw new RuntimeException("Người dùng không thuộc xưởng này. Không thể làm người sao lưu.");
+            }
+        }
+
         t.setBackupMember(member);
         Task saved = taskRepo.save(t);
 
