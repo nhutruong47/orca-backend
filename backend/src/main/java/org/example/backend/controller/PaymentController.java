@@ -69,20 +69,21 @@ public class PaymentController {
         return ResponseEntity.ok(vnpayPaymentService.confirmVirtualQrPayment(user, body.get("txnRef")));
     }
 
-    @GetMapping("/momo/return")
-    public ResponseEntity<Void> handleMomoReturn(@RequestParam Map<String, String> params) {
-        Map<String, Object> result = vnpayPaymentService.handleMomoReturn(params);
+    @GetMapping("/mbbank/return")
+    public ResponseEntity<Void> handleMbBankReturn(@RequestParam Map<String, String> params) {
+        Map<String, Object> result = vnpayPaymentService.handleMbBankReturn(params);
         HttpHeaders headers = new HttpHeaders();
+        // MB Bank không có return url theo chuẩn ví điện tử, có thể chuyển về trang frontend báo đang xử lý
         headers.setLocation(URI.create(vnpayPaymentService.buildFrontendRedirect(result)));
         return new ResponseEntity<>(headers, HttpStatus.FOUND);
     }
 
-    @PostMapping("/momo/ipn")
-    public ResponseEntity<Map<String, Object>> handleMomoIpn(@RequestBody Map<String, Object> body) {
-        Map<String, Object> result = vnpayPaymentService.handleMomoIpn(body);
+    @PostMapping("/mbbank/ipn")
+    public ResponseEntity<Map<String, Object>> handleMbBankIpn(@RequestBody Map<String, Object> body) {
+        Map<String, Object> result = vnpayPaymentService.handleMbBankIpn(body);
         return ResponseEntity.ok(Map.of(
                 "resultCode", "SUCCESS".equals(result.get("status")) ? 0 : 1,
-                "message", result.getOrDefault("message", "Unknown error")
+                "message", result.getOrDefault("message", "Processed")
         ));
     }
 

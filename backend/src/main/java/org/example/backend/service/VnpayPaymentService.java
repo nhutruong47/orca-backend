@@ -59,26 +59,14 @@ public class VnpayPaymentService {
     @Value("${app.frontend.url:http://localhost:5173}")
     private String frontendUrl;
 
-    @Value("${momo.create-url:https://test-payment.momo.vn/v2/gateway/api/create}")
-    private String momoCreateUrl;
+    @Value("${mbbank.account-number:0999999999}")
+    private String mbAccountNumber;
 
-    @Value("${momo.partner-code:}")
-    private String momoPartnerCode;
+    @Value("${mbbank.account-name:NGUYEN VAN A}")
+    private String mbAccountName;
 
-    @Value("${momo.access-key:}")
-    private String momoAccessKey;
-
-    @Value("${momo.secret-key:}")
-    private String momoSecretKey;
-
-    @Value("${momo.redirect-url:http://localhost:8080/api/payments/momo/return}")
-    private String momoRedirectUrl;
-
-    @Value("${momo.ipn-url:http://localhost:8080/api/payments/momo/ipn}")
-    private String momoIpnUrl;
-
-    @Value("${momo.allow-manual-confirm:true}")
-    private boolean momoAllowManualConfirm;
+    @Value("${mbbank.allow-manual-confirm:true}")
+    private boolean mbAllowManualConfirm;
 
     public VnpayPaymentService(PaymentTransactionRepository paymentRepository, UserRepository userRepository) {
         this.paymentRepository = paymentRepository;
@@ -168,11 +156,11 @@ public class VnpayPaymentService {
     public Map<String, Object> createVirtualQrPayment(User user, String planId, String method) {
         Plan plan = findPlan(planId);
         String paymentMethod = normalizePaymentMethod(method);
-        if ("MOMO".equals(paymentMethod)) {
-            if (!isMomoConfigured() && momoAllowManualConfirm) {
-                return createLocalVirtualQrPayment(user, plan, paymentMethod);
+        if ("MB_BANK".equals(paymentMethod)) {
+            if (mbAllowManualConfirm) {
+                return createMbBankQrPayment(user, plan);
             }
-            return createMomoQrPayment(user, plan);
+            return createLocalVirtualQrPayment(user, plan, paymentMethod);
         }
 
         return createLocalVirtualQrPayment(user, plan, paymentMethod);
@@ -207,47 +195,13 @@ public class VnpayPaymentService {
         return response;
     }
 
-    private Map<String, Object> createMomoQrPayment(User user, Plan plan) {
-        ensureMomoConfigured();
-
-        String txnRef = "ORCAMOMO" + System.currentTimeMillis();
-        String requestId = txnRef;
-        String requestType = "captureWallet";
-        String extraData = "";
-        String orderInfo = "Thanh toan goi " + plan.name() + " cho ORCA";
-        String rawSignature = "accessKey=" + momoAccessKey
-                + "&amount=" + plan.monthlyPrice()
-                + "&extraData=" + extraData
-                + "&ipnUrl=" + momoIpnUrl
-                + "&orderId=" + txnRef
-                + "&orderInfo=" + orderInfo
-                + "&partnerCode=" + momoPartnerCode
-                + "&redirectUrl=" + momoRedirectUrl
-                + "&requestId=" + requestId
-                + "&requestType=" + requestType;
-
-        Map<String, Object> requestBody = new LinkedHashMap<>();
-        requestBody.put("partnerCode", momoPartnerCode);
-        requestBody.put("accessKey", momoAccessKey);
-        requestBody.put("requestType", requestType);
-        requestBody.put("ipnUrl", momoIpnUrl);
-        requestBody.put("redirectUrl", momoRedirectUrl);
-        requestBody.put("orderId", txnRef);
-        requestBody.put("amount", String.valueOf(plan.monthlyPrice()));
-        requestBody.put("orderInfo", orderInfo);
-        requestBody.put("requestId", requestId);
-        requestBody.put("extraData", extraData);
-        requestBody.put("signature", hmacSha256(momoSecretKey, rawSignature));
-        requestBody.put("lang", "vi");
-
-        Map<String, Object> momoResponse = callMomoCreate(requestBody);
-        int resultCode = parseInt(momoResponse.get("resultCode"));
-        String message = safeString(momoResponse.get("message"));
-        String qrCodeUrl = safeString(momoResponse.get("qrCodeUrl"));
-
-        if (resultCode != 0 || qrCodeUrl.isBlank()) {
-            throw new RuntimeException("MoMo sandbox khong tao duoc QR: " + (message.isBlank() ? "resultCode=" + resultCode : message));
-        }
+    private Map<String, Object> createMbBankQrPayment(User user, Plan plan) {
+        String txnRef = "ORCAMB" + System.currentTimeMillis();
+        String orderInfo = "Thanh toan goi " + plan.name();
+        
+        // VietQR format
+        String qrCodeUrl = "https://img.vietqr.io/image/970422-" + mbAccountNumber + "-compact2.png?amount=" 
+                + plan.monthlyPrice() + "&addInfo=" + urlEncode(txnRef) + "&accountName=" + urlEncode(mbAccountName);
 
         PaymentTransaction transaction = new PaymentTransaction();
         transaction.setTxnRef(txnRef);
@@ -255,10 +209,10 @@ public class VnpayPaymentService {
         transaction.setPlanId(plan.id());
         transaction.setAmount(plan.monthlyPrice());
         transaction.setStatus("PENDING");
-        transaction.setBankCode("MOMO_QR");
-        transaction.setPaymentMethod("MOMO");
+        transaction.setBankCode("MB_BANK_QR");
+        transaction.setPaymentMethod("MB_BANK");
         transaction.setQrPayload(qrCodeUrl);
-        transaction.setVnpResponseCode(String.valueOf(resultCode));
+        transaction.setVnpResponseCode("PENDING");
         transaction.setVnpTransactionStatus("PENDING");
         paymentRepository.save(transaction);
 
@@ -267,36 +221,14 @@ public class VnpayPaymentService {
         response.put("planId", plan.id());
         response.put("planName", plan.name());
         response.put("amount", plan.monthlyPrice());
-        response.put("paymentMethod", "MOMO");
-        response.put("paymentMethodName", "MoMo");
+        response.put("paymentMethod", "MB_BANK");
+        response.put("paymentMethodName", "Chuyển khoản MB Bank");
         response.put("qrPayload", qrCodeUrl);
         response.put("qrCodeUrl", qrCodeUrl);
-        response.put("deeplink", safeString(momoResponse.get("deeplink")));
-        response.put("payUrl", safeString(momoResponse.get("payUrl")));
         response.put("status", "PENDING");
-        response.put("message", message.isBlank() ? "Quet ma QR bang MoMo Test" : message);
+        response.put("message", "Vui lòng dùng ứng dụng ngân hàng quét mã QR để chuyển khoản. Nhập đúng nội dung chuyển khoản là: " + txnRef);
         response.put("expiresAt", LocalDateTime.now(VIETNAM_ZONE).plusMinutes(15).toString());
         return response;
-    }
-
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> callMomoCreate(Map<String, Object> requestBody) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        try {
-            ResponseEntity<Map> response = restTemplate.postForEntity(
-                    momoCreateUrl,
-                    new HttpEntity<>(requestBody, headers),
-                    Map.class
-            );
-            Map<String, Object> body = response.getBody();
-            if (body == null) {
-                throw new RuntimeException("MoMo sandbox tra ve response rong");
-            }
-            return body;
-        } catch (RestClientException ex) {
-            throw new RuntimeException("Khong goi duoc MoMo sandbox: " + ex.getMessage(), ex);
-        }
     }
 
     @Transactional
@@ -313,8 +245,8 @@ public class VnpayPaymentService {
         }
 
         String paymentMethod = normalizePaymentMethod(transaction.getPaymentMethod());
-        if ("MOMO".equals(paymentMethod) && !momoAllowManualConfirm) {
-            throw new RuntimeException("Giao dich MoMo can duoc xac nhan qua IPN/return cua MoMo");
+        if ("MB_BANK".equals(paymentMethod) && !mbAllowManualConfirm) {
+            throw new RuntimeException("Giao dich MB Bank can duoc xac nhan qua webhook");
         }
 
         if ("PAID".equalsIgnoreCase(transaction.getStatus())) {
@@ -354,13 +286,14 @@ public class VnpayPaymentService {
     }
 
     @Transactional
-    public Map<String, Object> handleMomoReturn(Map<String, String> params) {
-        return processMomoResult(new HashMap<>(params));
+    public Map<String, Object> handleMbBankReturn(Map<String, String> params) {
+        return new HashMap<>(); // Thường không dùng return trực tiếp cho chuyển khoản ngân hàng
     }
 
     @Transactional
-    public Map<String, Object> handleMomoIpn(Map<String, Object> body) {
-        return processMomoResult(body);
+    public Map<String, Object> handleMbBankIpn(Map<String, Object> body) {
+        // Có thể tích hợp webhook SePay/Casso ở đây
+        return new HashMap<>();
     }
 
     public String buildFrontendRedirect(Map<String, Object> result) {
@@ -439,67 +372,7 @@ public class VnpayPaymentService {
         return expectedHash.equalsIgnoreCase(receivedHash);
     }
 
-    private Map<String, Object> processMomoResult(Map<String, ?> params) {
-        String txnRef = safeString(params.get("orderId"));
-        PaymentTransaction transaction = paymentRepository.findByTxnRef(txnRef)
-                .orElse(null);
 
-        if (!verifyMomoSignature(params)) {
-            return result(txnRef, null, "INVALID_SIGNATURE", "Chu ky MoMo khong hop le", null);
-        }
-        if (transaction == null) {
-            return result(txnRef, null, "NOT_FOUND", "Khong tim thay giao dich", null);
-        }
-        if (parseLong(safeString(params.get("amount"))) != transaction.getAmount()) {
-            return result(txnRef, transaction.getPlanId(), "INVALID_AMOUNT", "So tien khong khop", null);
-        }
-
-        int resultCode = parseInt(params.get("resultCode"));
-        boolean paid = resultCode == 0;
-        transaction.setVnpResponseCode(String.valueOf(resultCode));
-        transaction.setVnpTransactionStatus(paid ? "00" : String.valueOf(resultCode));
-        transaction.setVnpTransactionNo(safeString(params.get("transId")));
-        transaction.setBankCode(safeString(params.get("payType")).isBlank() ? "MOMO_QR" : safeString(params.get("payType")));
-        transaction.setPaymentMethod("MOMO");
-
-        if (paid) {
-            transaction.setStatus("PAID");
-            transaction.setPaidAt(LocalDateTime.now());
-            activatePlan(transaction.getUser(), transaction.getPlanId());
-        } else {
-            transaction.setStatus("FAILED");
-        }
-        paymentRepository.save(transaction);
-
-        return result(
-                txnRef,
-                transaction.getPlanId(),
-                paid ? "SUCCESS" : "FAILED",
-                paid ? "Thanh toan MoMo thanh cong" : safeString(params.get("message")),
-                null
-        );
-    }
-
-    private boolean verifyMomoSignature(Map<String, ?> params) {
-        String receivedSignature = safeString(params.get("signature"));
-        if (receivedSignature.isBlank()) {
-            return false;
-        }
-        String rawSignature = "accessKey=" + momoAccessKey
-                + "&amount=" + safeString(params.get("amount"))
-                + "&extraData=" + safeString(params.get("extraData"))
-                + "&message=" + safeString(params.get("message"))
-                + "&orderId=" + safeString(params.get("orderId"))
-                + "&orderInfo=" + safeString(params.get("orderInfo"))
-                + "&orderType=" + safeString(params.get("orderType"))
-                + "&partnerCode=" + safeString(params.get("partnerCode"))
-                + "&payType=" + safeString(params.get("payType"))
-                + "&requestId=" + safeString(params.get("requestId"))
-                + "&responseTime=" + safeString(params.get("responseTime"))
-                + "&resultCode=" + safeString(params.get("resultCode"))
-                + "&transId=" + safeString(params.get("transId"));
-        return hmacSha256(momoSecretKey, rawSignature).equalsIgnoreCase(receivedSignature);
-    }
 
     private String buildQuery(Map<String, String> params, boolean encode) {
         StringBuilder builder = new StringBuilder();
@@ -546,46 +419,18 @@ public class VnpayPaymentService {
                 .orElseThrow(() -> new RuntimeException("Goi AI khong hop le"));
     }
 
-    private String hmacSha256(String key, String data) {
-        if (key == null || key.isBlank()) {
-            throw new IllegalStateException("Missing MoMo secret key");
-        }
-        try {
-            Mac hmac = Mac.getInstance("HmacSHA256");
-            hmac.init(new SecretKeySpec(key.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-            byte[] bytes = hmac.doFinal(data.getBytes(StandardCharsets.UTF_8));
-            StringBuilder hash = new StringBuilder();
-            for (byte item : bytes) {
-                hash.append(String.format("%02x", item));
-            }
-            return hash.toString();
-        } catch (Exception ex) {
-            throw new IllegalStateException("Cannot sign MoMo request", ex);
-        }
-    }
 
-    private void ensureMomoConfigured() {
-        if (!isMomoConfigured()) {
-            throw new IllegalStateException("Missing MoMo sandbox config. Set MOMO_PARTNER_CODE, MOMO_ACCESS_KEY, MOMO_SECRET_KEY.");
-        }
-    }
-
-    private boolean isMomoConfigured() {
-        return momoPartnerCode != null && !momoPartnerCode.isBlank()
-                && momoAccessKey != null && !momoAccessKey.isBlank()
-                && momoSecretKey != null && !momoSecretKey.isBlank();
-    }
 
     private String normalizePaymentMethod(String method) {
         String normalized = method == null ? "VNPAY" : method.trim().toUpperCase(Locale.ROOT);
-        if (!List.of("MOMO", "VNPAY").contains(normalized)) {
+        if (!List.of("MB_BANK", "VNPAY").contains(normalized)) {
             throw new RuntimeException("Phuong thuc thanh toan khong hop le");
         }
         return normalized;
     }
 
     private String paymentMethodLabel(String method) {
-        return "MOMO".equalsIgnoreCase(method) ? "MoMo" : "VNPay";
+        return "MB_BANK".equalsIgnoreCase(method) ? "MB Bank" : "VNPay";
     }
 
     private String buildVirtualQrPayload(String method, String txnRef, Plan plan) {

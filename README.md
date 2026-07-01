@@ -47,8 +47,8 @@ Backend:
 - OAuth2 Client and Resource Server
 - Spring Data JPA / Hibernate
 - WebSocket / STOMP
-- H2 for local development
-- PostgreSQL for production
+- PostgreSQL for local development and production
+- H2 for isolated tests
 - Maven Wrapper
 
 Frontend:
@@ -107,7 +107,8 @@ orca/
 |   |-- package.json
 |   |-- package-lock.json
 |   `-- vite.config.ts
-|-- data/                        # Local H2 database files
+|-- docker-compose.yml            # Local PostgreSQL service
+|-- data/                        # Legacy local H2 database files
 |-- .legacy/                     # Archived pre-restructure folders
 |-- .gitignore
 `-- README.md
@@ -166,6 +167,12 @@ Frontend layers:
 
 ### Start Backend
 
+Start PostgreSQL first:
+
+```powershell
+docker compose up -d postgres
+```
+
 ```powershell
 cd backend
 .\mvnw.cmd spring-boot:run
@@ -177,17 +184,19 @@ Default backend URL:
 http://localhost:8080
 ```
 
-Run backend with local H2 file database:
+Run backend with the local PostgreSQL profile:
 
 ```powershell
 cd backend
 .\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=local"
 ```
 
-H2 Console:
+Default local PostgreSQL connection:
 
 ```text
-http://localhost:8080/h2-console
+jdbc:postgresql://localhost:5432/orca_db
+user: postgres
+password: admin
 ```
 
 ### Start Frontend
@@ -214,6 +223,7 @@ Backend:
 DB_URL=jdbc:postgresql://host:5432/database
 DB_USERNAME=database_user
 DB_PASSWORD=database_password
+DB_POOL_SIZE=5
 
 JWT_SECRET=replace_with_a_long_random_secret
 
@@ -231,6 +241,15 @@ VNPAY_PAY_URL=https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
 VNPAY_TMN_CODE=vnpay_tmn_code
 VNPAY_HASH_SECRET=vnpay_hash_secret
 VNPAY_RETURN_URL=https://your-backend-domain.com/api/payments/vnpay/return
+```
+
+Neon example:
+
+```env
+DB_URL=jdbc:postgresql://ep-example-123456.ap-southeast-1.aws.neon.tech/orca_db?sslmode=require
+DB_USERNAME=your_neon_user
+DB_PASSWORD=your_neon_password
+DB_POOL_SIZE=5
 ```
 
 Frontend:
@@ -372,17 +391,25 @@ Default backend URL:
 http://localhost:8080
 ```
 
-Run backend with local H2 file database:
+Start PostgreSQL first:
+
+```powershell
+docker compose up -d postgres
+```
+
+Run backend with the local PostgreSQL profile:
 
 ```powershell
 cd backend
 .\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=local"
 ```
 
-H2 Console:
+Default local PostgreSQL connection:
 
 ```text
-http://localhost:8080/h2-console
+jdbc:postgresql://localhost:5432/orca_db
+user: postgres
+password: admin
 ```
 
 ### Start Frontend
@@ -409,6 +436,7 @@ Backend:
 DB_URL=jdbc:postgresql://host:5432/database
 DB_USERNAME=database_user
 DB_PASSWORD=database_password
+DB_POOL_SIZE=5
 
 JWT_SECRET=replace_with_a_long_random_secret
 
@@ -426,6 +454,15 @@ VNPAY_PAY_URL=https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
 VNPAY_TMN_CODE=vnpay_tmn_code
 VNPAY_HASH_SECRET=vnpay_hash_secret
 VNPAY_RETURN_URL=https://your-backend-domain.com/api/payments/vnpay/return
+```
+
+Neon example:
+
+```env
+DB_URL=jdbc:postgresql://ep-example-123456.ap-southeast-1.aws.neon.tech/orca_db?sslmode=require
+DB_USERNAME=your_neon_user
+DB_PASSWORD=your_neon_password
+DB_POOL_SIZE=5
 ```
 
 Frontend:
@@ -561,7 +598,7 @@ Branch and commit recommendations:
 ## Maintenance Notes
 
 - `.legacy/` contains archived folders from the previous project layout. It is ignored by Git and should not be used for active development.
-- `data/` contains local H2 database files. Production should use PostgreSQL.
+- `data/` contains legacy local H2 database files. The active app database is PostgreSQL.
 - Runtime logs, build outputs, dependency folders, and generated files are ignored.
 - If frontend dependencies were cleaned, run `npm install` again inside `frontend/`.
 - If backend build output was cleaned, Maven will regenerate `backend/target/`.

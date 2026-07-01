@@ -73,7 +73,8 @@ public class SecurityConfig {
                                 "/api/payments/vnpay/return",
                                 "/api/payments/vnpay/ipn",
                                 "/api/payments/momo/return",
-                                "/api/payments/momo/ipn").permitAll()
+                                "/api/payments/momo/ipn",
+                                "/api/payments/payos/webhook").permitAll()
                         .requestMatchers("/api/debug/**").permitAll()
                         .requestMatchers("/api/teams/all").permitAll()
                         .requestMatchers("/uploads/**").permitAll()
