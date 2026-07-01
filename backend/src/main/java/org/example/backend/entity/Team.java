@@ -15,6 +15,9 @@ public class Team {
     @Column(updatable = false, nullable = false)
     private UUID id;
 
+    @Version
+    private Long version;
+
     @Column(nullable = false)
     private String name;
 

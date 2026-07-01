@@ -46,6 +46,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                 UserDetails userDetails = userDetailsService.loadUserByUsername(username);
 
+                if (!userDetails.isAccountNonLocked()) {
+                    throw new RuntimeException("Tài khoản đã bị khoá. Vui lòng liên hệ Admin.");
+                }
+
                 if (jwtUtil.validateToken(jwt, userDetails)) {
                     UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
                             userDetails, null, userDetails.getAuthorities());

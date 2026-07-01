@@ -246,7 +246,11 @@ public class VnpayPaymentService {
 
         String paymentMethod = normalizePaymentMethod(transaction.getPaymentMethod());
         if ("MB_BANK".equals(paymentMethod) && !mbAllowManualConfirm) {
-            throw new RuntimeException("Giao dich MB Bank can duoc xac nhan qua webhook");
+            Map<String, Object> pendingResponse = new LinkedHashMap<>();
+            pendingResponse.put("status", "PENDING");
+            pendingResponse.put("message", "Giao dịch đang chờ xác nhận tự động từ ngân hàng qua hệ thống. Vui lòng đợi trong giây lát.");
+            pendingResponse.put("txnRef", txnRef);
+            return pendingResponse;
         }
 
         if ("PAID".equalsIgnoreCase(transaction.getStatus())) {

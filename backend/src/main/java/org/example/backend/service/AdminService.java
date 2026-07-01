@@ -480,7 +480,9 @@ public class AdminService {
         map.put("username", user.getUsername());
         map.put("fullName", safeText(user.getFullName(), ""));
         map.put("email", safeText(user.getEmail(), ""));
-        map.put("role", user.getRole().name());
+        boolean isOwner = !teamRepository.findByOwnerId(user.getId()).isEmpty();
+        String displayRole = user.getRole().name().equals("ADMIN") ? "ADMIN" : (isOwner ? "FACTORY_OWNER" : "MEMBER");
+        map.put("role", displayRole);
         map.put("chipId", safeText(user.getChipId(), ""));
         map.put("aiPlan", safeText(user.getAiPlan(), "free"));
         map.put("status", user.isLocked() ? "Locked" : "Active");
@@ -496,7 +498,10 @@ public class AdminService {
         map.put("description", safeText(team.getDescription(), ""));
         map.put("ownerId", team.getOwner() != null ? team.getOwner().getId().toString() : "");
         map.put("ownerName", team.getOwner() != null ? team.getOwner().getUsername() : "");
-        map.put("memberCount", teamMemberRepository.findByTeamId(team.getId()).size());
+        
+        int dbCount = teamMemberRepository.findByTeamId(team.getId()).size();
+        map.put("memberCount", dbCount > 0 ? dbCount : 1);
+        
         map.put("createdAt", team.getCreatedAt() != null ? team.getCreatedAt().toString() : null);
         map.put("published", team.isPublished());
         map.put("specialty", safeText(team.getSpecialty(), ""));

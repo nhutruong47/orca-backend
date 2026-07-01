@@ -59,7 +59,7 @@ public class PayosPaymentService {
         paymentRepository.save(transaction);
 
         String returnUrl = frontendUrl + "/payment-result?txnRef=" + txnRef + "&planId=" + planId;
-        String cancelUrl = frontendUrl + "/upgrade-plan";
+        String cancelUrl = frontendUrl + "/upgrade";
 
         CreatePaymentLinkRequest paymentData = CreatePaymentLinkRequest.builder()
                 .orderCode(orderCode)

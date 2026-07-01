@@ -36,8 +36,19 @@ public class AiController {
                     "Hết hạn gói miễn phí. Bạn cần nâng cấp gói để sử dụng tốt hơn."
             );
         }
-        user.setAiUsageCount(user.getAiUsageCount() + 1);
-        userRepository.save(user);
+        int limit = 10;
+        if ("enterprise".equalsIgnoreCase(user.getAiPlan())) {
+            limit = Integer.MAX_VALUE;
+        } else if ("professional".equalsIgnoreCase(user.getAiPlan()) || "plus".equalsIgnoreCase(user.getAiPlan())) {
+            limit = 100;
+        }
+        int updated = userRepository.incrementAiUsageIfUnderLimit(user.getId(), limit);
+        if (updated == 0) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.PAYMENT_REQUIRED,
+                    "Bạn đã đạt giới hạn sử dụng AI. Vui lòng nâng cấp gói dịch vụ."
+            );
+        }
 
         System.out.println("DEBUG AiController - parseText called with: " + payload);
         String text = payload.getOrDefault("text", "");

@@ -15,4 +15,9 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findByChipId(String chipId);
 
     Boolean existsByUsername(String username);
+
+    @org.springframework.transaction.annotation.Transactional
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query("UPDATE User u SET u.aiUsageCount = u.aiUsageCount + 1 WHERE u.id = :userId AND u.aiUsageCount < :limit")
+    int incrementAiUsageIfUnderLimit(@org.springframework.data.repository.query.Param("userId") UUID userId, @org.springframework.data.repository.query.Param("limit") int limit);
 }
