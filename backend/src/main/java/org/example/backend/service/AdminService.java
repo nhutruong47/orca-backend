@@ -125,6 +125,7 @@ public class AdminService {
         }
     }
 
+    @Transactional(readOnly = true)
     public Map<String, Object> getOverview() {
         List<User> users = userRepository.findAll();
         List<Team> teams = teamRepository.findAll();
@@ -241,6 +242,7 @@ public class AdminService {
         return List.of("COMPLETED", "COMPLETE", "DONE").contains(normalized);
     }
 
+    @Transactional(readOnly = true)
     public List<Map<String, Object>> getUsers() {
         return userRepository.findAll().stream()
                 .sorted(this::compareCreatedAtDesc)
@@ -248,6 +250,7 @@ public class AdminService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
     public List<Map<String, Object>> getTeams() {
         return teamRepository.findAll().stream()
                 .sorted(this::compareCreatedAtDesc)
@@ -255,6 +258,7 @@ public class AdminService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
     public List<Map<String, Object>> getOrders() {
         return orderRepository.findAll().stream()
                 .sorted(this::compareCreatedAtDesc)
@@ -262,6 +266,7 @@ public class AdminService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
     public List<Map<String, Object>> getTasks() {
         return taskRepository.findAll().stream()
                 .sorted(this::compareCreatedAtDesc)
@@ -269,6 +274,7 @@ public class AdminService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
     public List<Map<String, Object>> getPayments() {
         return paymentRepository.findAll().stream()
                 .sorted(this::comparePaidAtDesc)
