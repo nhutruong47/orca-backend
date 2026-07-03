@@ -225,12 +225,13 @@ public class DebugController {
         User owner = userRepository.findByUsername("trangdh857").orElseGet(() -> {
             User u = new User();
             u.setUsername("trangdh857");
-            u.setPassword(passwordEncoder.encode("123456"));
             u.setFullName("Chủ xưởng Đặng Hải Trang");
             u.setEmail("trangdh857@demo.com");
             u.setRole(Role.FACTORY_OWNER);
-            return userRepository.save(u);
+            return u;
         });
+        owner.setPassword(passwordEncoder.encode("123456"));
+        owner = userRepository.save(owner);
 
         // Create team
         Team team = teamRepository.findAll().stream().filter(t -> "Nhà máy Đặng Hải Trang".equals(t.getName())).findFirst().orElseGet(() -> {
