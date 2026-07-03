@@ -192,10 +192,9 @@ Hard rules:
 - deadline must be copied from extracted fields.deadline exactly when present.
 - priority must be an integer: 1 lowest, 3 medium, 5 highest.
 - workload is estimated effort hours, must be greater than 0.
-- suggestedAssigneeId is optional and must be one of the provided team member userId values.
-- If no suitable member exists, set suggestedAssigneeId and suggestedAssigneeName to null.
-- A member with empty jobLabels is not suitable for any specialized task.
-- Only suggest a member when their jobLabels semantically match the task.
+- suggestedAssigneeId should strongly be suggested using one of the provided team member userId values.
+- If no perfectly matching member exists, you can still suggest an assignee if their jobLabels are somewhat related, or if it is a general task.
+- Match members to tasks based on their jobLabels (e.g. "Rang xay" matches roasting tasks).
 - Never invent a person, username, full name, or userId.
 - suggestedAssigneeName must match the selected member's fullName when available, otherwise username.
 - Keep the draft in Vietnamese.
