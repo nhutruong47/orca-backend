@@ -18,6 +18,9 @@ import org.example.backend.entity.Team;
 import org.example.backend.entity.User;
 import org.example.backend.entity.Role;
 import org.example.backend.entity.InventoryItem;
+import org.example.backend.entity.TeamMember;
+import org.example.backend.entity.GroupRole;
+import java.time.LocalDateTime;
 
 @RestController
 @RequestMapping("/api/debug")
@@ -213,5 +216,64 @@ public class DebugController {
         t.setMetadata(String.format("{\"capabilitiesMock\":%s,\"equipmentMock\":%s,\"portfolioMock\":%s,\"reviewsMock\":%s,\"certificatesMock\":%s}", mockCapabilities, mockEquipment, mockPortfolio, mockReviews, mockCertificates));
 
         return t;
+    }
+
+    @GetMapping("/seed-20-members")
+    @Transactional
+    public Map<String, Object> seed20Members() {
+        // Create owner
+        User owner = userRepository.findByUsername("trangdh857").orElseGet(() -> {
+            User u = new User();
+            u.setUsername("trangdh857");
+            u.setPassword(passwordEncoder.encode("123456"));
+            u.setFullName("Chủ xưởng Đặng Hải Trang");
+            u.setEmail("trangdh857@demo.com");
+            u.setRole(Role.FACTORY_OWNER);
+            return userRepository.save(u);
+        });
+
+        // Create team
+        Team team = teamRepository.findAll().stream().filter(t -> "Nhà máy Đặng Hải Trang".equals(t.getName())).findFirst().orElseGet(() -> {
+            Team t = new Team();
+            t.setName("Nhà máy Đặng Hải Trang");
+            t.setDescription("Nhà máy cà phê quy mô 20 thành viên.");
+            t.setOwner(owner);
+            t.setMemberCount(20);
+            return teamRepository.save(t);
+        });
+
+        // Create 20 members
+        for (int i = 1; i <= 20; i++) {
+            final int index = i;
+            User memberUser = userRepository.findByUsername("member_demo_" + i).orElseGet(() -> {
+                User u = new User();
+                u.setUsername("member_demo_" + index);
+                u.setPassword(passwordEncoder.encode("123456"));
+                u.setFullName("Thành viên " + index);
+                u.setEmail("member" + index + "@demo.com");
+                u.setRole(Role.MEMBER);
+                return userRepository.save(u);
+            });
+
+            // Check if team member exists
+            long count = (long) entityManager.createQuery("SELECT COUNT(tm) FROM TeamMember tm WHERE tm.team = :team AND tm.user = :user")
+                    .setParameter("team", team)
+                    .setParameter("user", memberUser)
+                    .getSingleResult();
+            if (count == 0) {
+                TeamMember tm = new TeamMember();
+                tm.setTeam(team);
+                tm.setUser(memberUser);
+                tm.setGroupRole(GroupRole.MEMBER);
+                tm.setJoinedAt(LocalDateTime.now());
+                entityManager.persist(tm);
+            }
+        }
+        
+        // Update member count
+        team.setMemberCount(20);
+        teamRepository.save(team);
+
+        return Map.of("message", "Đã tạo thành công xưởng Nhà máy Đặng Hải Trang với 20 thành viên!", "owner_username", "trangdh857", "owner_password", "123456");
     }
 }
