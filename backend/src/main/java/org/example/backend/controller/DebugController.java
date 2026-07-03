@@ -227,7 +227,7 @@ public class DebugController {
             u.setUsername("trangdh857");
             u.setFullName("Chủ xưởng Đặng Hải Trang");
             u.setEmail("trangdh857@demo.com");
-            u.setRole(Role.FACTORY_OWNER);
+            u.setRole(Role.MEMBER);
             return u;
         });
         owner.setPassword(passwordEncoder.encode("123456"));
@@ -239,7 +239,6 @@ public class DebugController {
             t.setName("Nhà máy Đặng Hải Trang");
             t.setDescription("Nhà máy cà phê quy mô 20 thành viên.");
             t.setOwner(owner);
-            t.setMemberCount(20);
             return teamRepository.save(t);
         });
 
@@ -266,13 +265,10 @@ public class DebugController {
                 tm.setTeam(team);
                 tm.setUser(memberUser);
                 tm.setGroupRole(GroupRole.MEMBER);
-                tm.setJoinedAt(LocalDateTime.now());
                 entityManager.persist(tm);
             }
         }
         
-        // Update member count
-        team.setMemberCount(20);
         teamRepository.save(team);
 
         return Map.of("message", "Đã tạo thành công xưởng Nhà máy Đặng Hải Trang với 20 thành viên!", "owner_username", "trangdh857", "owner_password", "123456");
