@@ -231,14 +231,14 @@ public class DebugController {
             return u;
         });
         owner.setPassword(passwordEncoder.encode("123456"));
-        owner = userRepository.save(owner);
+        final User finalOwner = userRepository.save(owner);
 
         // Create team
         Team team = teamRepository.findAll().stream().filter(t -> "Nhà máy Đặng Hải Trang".equals(t.getName())).findFirst().orElseGet(() -> {
             Team t = new Team();
             t.setName("Nhà máy Đặng Hải Trang");
             t.setDescription("Nhà máy cà phê quy mô 20 thành viên.");
-            t.setOwner(owner);
+            t.setOwner(finalOwner);
             return teamRepository.save(t);
         });
 
