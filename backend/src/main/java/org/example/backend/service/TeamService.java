@@ -38,6 +38,9 @@ public class TeamService {
     @Autowired
     private JwtUtil jwtUtil;
 
+    @Autowired
+    private InventoryService inventoryService;
+
     /**
      * Lấy tất cả nhóm mà user tham gia
      */
@@ -94,6 +97,8 @@ public class TeamService {
         ownerMember.setGroupRole(GroupRole.ADMIN);
         teamMemberRepository.save(ownerMember);
 
+        inventoryService.initializeDefaultInventory(team.getId());
+
         return toDTO(team, false);
     }
 
@@ -111,6 +116,9 @@ public class TeamService {
         }
         if (dto.getDescription() != null) {
             team.setDescription(dto.getDescription().trim());
+        }
+        if (dto.getMetadata() != null) {
+            team.setMetadata(dto.getMetadata());
         }
 
         return toDTO(teamRepository.save(team), false);

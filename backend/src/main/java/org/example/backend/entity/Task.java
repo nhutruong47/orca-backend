@@ -81,6 +81,11 @@ public class Task {
     @Column(name = "due_time")
     private LocalDateTime dueTime;
 
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "supervisor_id")
+    @OnDelete(action = OnDeleteAction.SET_NULL)
+    private User supervisor;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -212,4 +217,7 @@ public class Task {
 
     public LocalDateTime getDueTime() { return dueTime; }
     public void setDueTime(LocalDateTime dueTime) { this.dueTime = dueTime; }
+
+    public User getSupervisor() { return supervisor; }
+    public void setSupervisor(User supervisor) { this.supervisor = supervisor; }
 }

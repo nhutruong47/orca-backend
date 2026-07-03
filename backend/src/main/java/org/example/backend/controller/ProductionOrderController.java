@@ -2,8 +2,11 @@ package org.example.backend.controller;
 
 import org.example.backend.dto.ProductionOrderDTO;
 import org.example.backend.entity.ProductionOrder;
+import org.example.backend.entity.User;
+import org.example.backend.service.AccessControlService;
 import org.example.backend.service.ProductionOrderService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -17,15 +20,19 @@ import java.util.stream.Collectors;
 public class ProductionOrderController {
 
     private final ProductionOrderService orderService;
+    private final AccessControlService accessControlService;
 
-    public ProductionOrderController(ProductionOrderService orderService) {
+    public ProductionOrderController(ProductionOrderService orderService, AccessControlService accessControlService) {
         this.orderService = orderService;
+        this.accessControlService = accessControlService;
     }
 
     @GetMapping("/teams/{teamId}/orders")
     public ResponseEntity<?> getOrders(
             @PathVariable UUID teamId,
+            @AuthenticationPrincipal User user,
             @RequestParam(required = false) String status) {
+        accessControlService.requireTeamMember(user, teamId);
         List<ProductionOrder> orders;
         if (status != null && !status.isBlank()) {
             orders = orderService.getActiveOrders(teamId);
@@ -41,7 +48,9 @@ public class ProductionOrderController {
     @PostMapping("/teams/{teamId}/orders")
     public ResponseEntity<?> createOrder(
             @PathVariable UUID teamId,
+            @AuthenticationPrincipal User user,
             @RequestBody Map<String, Object> body) {
+        accessControlService.requireTeamMember(user, teamId);
         try {
             ProductionOrder raw = mapToOrder(body);
             ProductionOrder created = orderService.createOrder(teamId, raw);
@@ -52,7 +61,8 @@ public class ProductionOrderController {
     }
 
     @GetMapping("/orders/{orderId}")
-    public ResponseEntity<?> getOrder(@PathVariable UUID orderId) {
+    public ResponseEntity<?> getOrder(@PathVariable UUID orderId, @AuthenticationPrincipal User user) {
+        accessControlService.requireProductionOrderAccess(user, orderId);
         try {
             ProductionOrder order = orderService.getById(orderId);
             return ResponseEntity.ok(orderService.toDTO(order));
@@ -64,7 +74,9 @@ public class ProductionOrderController {
     @PatchMapping("/orders/{orderId}")
     public ResponseEntity<?> updateOrder(
             @PathVariable UUID orderId,
+            @AuthenticationPrincipal User user,
             @RequestBody Map<String, Object> body) {
+        accessControlService.requireProductionOrderAccess(user, orderId);
         try {
             ProductionOrder raw = mapToOrder(body);
             raw.setStatus(getString(body, "status"));
@@ -78,7 +90,9 @@ public class ProductionOrderController {
     @PatchMapping("/orders/{orderId}/status")
     public ResponseEntity<?> updateStatus(
             @PathVariable UUID orderId,
+            @AuthenticationPrincipal User user,
             @RequestBody Map<String, String> body) {
+        accessControlService.requireProductionOrderAccess(user, orderId);
         try {
             ProductionOrder updated = orderService.updateStatus(orderId, body.get("status"));
             return ResponseEntity.ok(orderService.toDTO(updated));
@@ -88,7 +102,8 @@ public class ProductionOrderController {
     }
 
     @DeleteMapping("/orders/{orderId}")
-    public ResponseEntity<?> deleteOrder(@PathVariable UUID orderId) {
+    public ResponseEntity<?> deleteOrder(@PathVariable UUID orderId, @AuthenticationPrincipal User user) {
+        accessControlService.requireProductionOrderAccess(user, orderId);
         try {
             orderService.deleteOrder(orderId);
             return ResponseEntity.noContent().build();
@@ -98,7 +113,8 @@ public class ProductionOrderController {
     }
 
     @GetMapping("/teams/{teamId}/orders/active")
-    public ResponseEntity<?> getActiveOrders(@PathVariable UUID teamId) {
+    public ResponseEntity<?> getActiveOrders(@PathVariable UUID teamId, @AuthenticationPrincipal User user) {
+        accessControlService.requireTeamMember(user, teamId);
         List<ProductionOrder> orders = orderService.getActiveOrders(teamId);
         List<ProductionOrderDTO> dtos = orders.stream()
                 .map(orderService::toDTO)

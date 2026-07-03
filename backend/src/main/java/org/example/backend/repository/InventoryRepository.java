@@ -18,4 +18,6 @@ public interface InventoryRepository extends JpaRepository<InventoryItem, UUID> 
     List<InventoryItem> findByTeamIdAndProductState(UUID teamId, String productState);
 
     List<InventoryItem> findByIsFeaturedTrue();
+
+    boolean existsByTeamId(UUID teamId);
 }

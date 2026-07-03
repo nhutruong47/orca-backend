@@ -51,17 +51,20 @@ public class InventoryService {
         Team t = teamRepo.findById(UUID.fromString(dto.getTeamId()))
                 .orElseThrow(() -> new RuntimeException("Team not found"));
 
+        String pType = dto.getProductType() != null ? dto.getProductType() : dto.getName();
+        String pState = dto.getProductState() != null ? dto.getProductState() : "GREEN";
+
         // Check if already exists
         Optional<InventoryItem> existing = inventoryRepo.findByTeamIdAndProductTypeAndProductState(
-                t.getId(), dto.getProductType(), dto.getProductState());
+                t.getId(), pType, pState);
         if (existing.isPresent()) {
-            throw new RuntimeException("Mục kho '" + dto.getProductType() + " - " + dto.getProductState() + "' đã tồn tại.");
+            throw new RuntimeException("Mục kho '" + pType + " - " + pState + "' đã tồn tại.");
         }
 
         InventoryItem item = new InventoryItem();
         item.setTeam(t);
-        item.setProductType(dto.getProductType());
-        item.setProductState(dto.getProductState() != null ? dto.getProductState() : "GREEN");
+        item.setProductType(pType);
+        item.setProductState(pState);
         item.setQuantity(dto.getQuantity() != null ? dto.getQuantity() : 0.0);
         item.setUnit(dto.getUnit() != null ? dto.getUnit() : "kg");
         item.setLowStockThreshold(dto.getLowStockThreshold() != null ? dto.getLowStockThreshold() : 100.0);
@@ -133,6 +136,9 @@ public class InventoryService {
      */
     @Transactional
     public void initializeDefaultInventory(UUID teamId) {
+        if (inventoryRepo.existsByTeamId(teamId)) {
+            return;
+        }
         Team team = teamRepo.findById(teamId)
                 .orElseThrow(() -> new RuntimeException("Team not found"));
         String[] types = {"Arabica", "Robusta", "Culi", "Blend"};

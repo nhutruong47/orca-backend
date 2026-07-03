@@ -3,6 +3,9 @@ package org.example.backend.controller;
 import org.example.backend.dto.DailyTargetDTO;
 import org.example.backend.dto.ProductionPlanDTO;
 import org.example.backend.service.ProductionPlanService;
+import org.example.backend.entity.User;
+import org.example.backend.service.AccessControlService;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,13 +19,18 @@ import java.util.UUID;
 public class ProductionPlanController {
 
     private final ProductionPlanService planService;
+    private final AccessControlService accessControlService;
 
-    public ProductionPlanController(ProductionPlanService planService) {
+    public ProductionPlanController(ProductionPlanService planService, AccessControlService accessControlService) {
         this.planService = planService;
+        this.accessControlService = accessControlService;
     }
 
     @PostMapping("/orders/{orderId}/generate")
-    public ResponseEntity<?> generatePlan(@PathVariable UUID orderId) {
+    public ResponseEntity<?> generatePlan(
+            @PathVariable UUID orderId,
+            @AuthenticationPrincipal User currentUser) {
+        accessControlService.requireProductionOrderAccess(currentUser, orderId);
         try {
             ProductionPlanDTO plan = planService.generatePlan(orderId);
             return ResponseEntity.ok(plan);
@@ -32,7 +40,10 @@ public class ProductionPlanController {
     }
 
     @GetMapping("/{planId}")
-    public ResponseEntity<?> getPlan(@PathVariable UUID planId) {
+    public ResponseEntity<?> getPlan(
+            @PathVariable UUID planId,
+            @AuthenticationPrincipal User currentUser) {
+        accessControlService.requireProductionPlanAccess(currentUser, planId);
         try {
             return ResponseEntity.ok(planService.getPlanById(planId));
         } catch (RuntimeException e) {
@@ -41,14 +52,19 @@ public class ProductionPlanController {
     }
 
     @GetMapping("/orders/{orderId}")
-    public ResponseEntity<?> getPlansByOrder(@PathVariable UUID orderId) {
+    public ResponseEntity<?> getPlansByOrder(
+            @PathVariable UUID orderId,
+            @AuthenticationPrincipal User currentUser) {
+        accessControlService.requireProductionOrderAccess(currentUser, orderId);
         return ResponseEntity.ok(planService.getPlansByOrder(orderId));
     }
 
     @PatchMapping("/{planId}/approve")
     public ResponseEntity<?> approvePlan(
             @PathVariable UUID planId,
+            @AuthenticationPrincipal User currentUser,
             @RequestBody(required = false) Map<String, String> body) {
+        accessControlService.requireProductionPlanAccess(currentUser, planId);
         try {
             UUID approvedBy = null;
             if (body != null && body.get("approvedBy") != null) {
@@ -61,14 +77,19 @@ public class ProductionPlanController {
     }
 
     @GetMapping("/{planId}/daily-targets")
-    public ResponseEntity<?> getDailyTargets(@PathVariable UUID planId) {
+    public ResponseEntity<?> getDailyTargets(
+            @PathVariable UUID planId,
+            @AuthenticationPrincipal User currentUser) {
+        accessControlService.requireProductionPlanAccess(currentUser, planId);
         return ResponseEntity.ok(planService.getDailyTargetsByPlan(planId));
     }
 
     @PatchMapping("/daily-targets/{targetId}")
     public ResponseEntity<?> updateDailyActual(
             @PathVariable UUID targetId,
+            @AuthenticationPrincipal User currentUser,
             @RequestBody Map<String, Object> body) {
+        accessControlService.requireDailyTargetAccess(currentUser, targetId);
         try {
             Double actualRoastKg = getDouble(body, "actualRoastKg");
             Double actualQcKg = getDouble(body, "actualQcKg");
@@ -88,7 +109,10 @@ public class ProductionPlanController {
     }
 
     @GetMapping("/today/{teamId}")
-    public ResponseEntity<?> getTodayTarget(@PathVariable UUID teamId) {
+    public ResponseEntity<?> getTodayTarget(
+            @PathVariable UUID teamId,
+            @AuthenticationPrincipal User currentUser) {
+        accessControlService.requireTeamMember(currentUser, teamId);
         DailyTargetDTO target = planService.getTodayTarget(teamId);
         if (target != null) {
             return ResponseEntity.ok(target);

@@ -25,11 +25,14 @@ public class TaskService {
     private final NotificationService notificationService;
     private final TeamMemberRepository teamMemberRepo;
     private final AttendanceRepository attendanceRepo;
+    private final TaskTransferRepository transferRepo;
+    private final TaskDependencyRepository dependencyRepo;
 
     public TaskService(TaskRepository taskRepo, GoalRepository goalRepo,
             UserRepository userRepo, TaskChecklistRepository checklistRepo,
             NotificationService notificationService, TeamMemberRepository teamMemberRepo,
-            AttendanceRepository attendanceRepo) {
+            AttendanceRepository attendanceRepo,
+            TaskTransferRepository transferRepo, TaskDependencyRepository dependencyRepo) {
         this.taskRepo = taskRepo;
         this.goalRepo = goalRepo;
         this.userRepo = userRepo;
@@ -37,6 +40,8 @@ public class TaskService {
         this.notificationService = notificationService;
         this.teamMemberRepo = teamMemberRepo;
         this.attendanceRepo = attendanceRepo;
+        this.transferRepo = transferRepo;
+        this.dependencyRepo = dependencyRepo;
     }
 
     public List<TaskDTO> getByGoal(UUID goalId) {
@@ -83,7 +88,9 @@ public class TaskService {
         Task saved = taskRepo.save(t);
 
         // Update goal progress
-        updateGoalProgress(saved.getGoal().getId());
+        if (saved.getGoal() != null) {
+            updateGoalProgress(saved.getGoal().getId());
+        }
 
         return toDTO(saved);
     }
@@ -97,7 +104,9 @@ public class TaskService {
             t.setStatus("IN_PROGRESS");
         }
         Task saved = taskRepo.save(t);
-        updateGoalProgress(saved.getGoal().getId());
+        if (saved.getGoal() != null) {
+            updateGoalProgress(saved.getGoal().getId());
+        }
         return toDTO(saved);
     }
 
@@ -320,10 +329,12 @@ public class TaskService {
 
     public void delete(UUID id) {
         Task t = taskRepo.findById(id).orElseThrow(() -> new RuntimeException("Task not found"));
-        UUID goalId = t.getGoal().getId();
+        UUID goalId = t.getGoal() != null ? t.getGoal().getId() : null;
         checklistRepo.deleteAll(checklistRepo.findByTaskIdOrderBySortOrderAsc(id));
         taskRepo.deleteById(id);
-        updateGoalProgress(goalId);
+        if (goalId != null) {
+            updateGoalProgress(goalId);
+        }
     }
 
     // === Checklist ===
@@ -373,7 +384,9 @@ public class TaskService {
             t.setStatus("COMPLETED");
         taskRepo.save(t);
 
-        updateGoalProgress(t.getGoal().getId());
+        if (t.getGoal() != null) {
+            updateGoalProgress(t.getGoal().getId());
+        }
     }
 
     // === KPI ===
@@ -441,6 +454,8 @@ public class TaskService {
         dto.setMemberName(t.getMember() != null ? t.getMember().getUsername() : null);
         dto.setBackupMemberId(t.getBackupMember() != null ? t.getBackupMember().getId().toString() : null);
         dto.setBackupMemberName(t.getBackupMember() != null ? t.getBackupMember().getUsername() : null);
+        dto.setSupervisorId(t.getSupervisor() != null ? t.getSupervisor().getId().toString() : null);
+        dto.setSupervisorName(t.getSupervisor() != null ? t.getSupervisor().getUsername() : null);
         dto.setCreatedAt(t.getCreatedAt());
         return dto;
     }
@@ -448,7 +463,7 @@ public class TaskService {
     public TaskDTO setBackup(UUID id, UUID memberId) {
         Task t = taskRepo.findById(id).orElseThrow(() -> new RuntimeException("Task not found"));
         User member = userRepo.findById(memberId).orElseThrow(() -> new RuntimeException("User not found"));
-        
+
         // Validate if member is in the team
         if (t.getGoal() != null && t.getGoal().getTeam() != null) {
             UUID teamId = t.getGoal().getTeam().getId();
@@ -472,6 +487,113 @@ public class TaskService {
         );
 
         return toDTO(saved);
+    }
+
+    public TaskDTO setSupervisor(UUID id, UUID supervisorId) {
+        Task t = taskRepo.findById(id).orElseThrow(() -> new RuntimeException("Task not found"));
+        User supervisor = userRepo.findById(supervisorId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (t.getGoal() != null && t.getGoal().getTeam() != null) {
+            UUID teamId = t.getGoal().getTeam().getId();
+            boolean isMember = teamMemberRepo.findByTeamId(teamId).stream()
+                    .anyMatch(tm -> tm.getUser().getId().equals(supervisorId));
+            if (!isMember) {
+                throw new RuntimeException("Người dùng không thuộc xưởng này. Không thể chỉ định giám sát.");
+            }
+        }
+
+        t.setSupervisor(supervisor);
+        return toDTO(taskRepo.save(t));
+    }
+
+    public TaskDTO transferTask(UUID id, UUID toMemberId, String reason, String actorType, User actor) {
+        Task t = taskRepo.findById(id).orElseThrow(() -> new RuntimeException("Task not found"));
+        User to = userRepo.findById(toMemberId).orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (t.getGoal() != null && t.getGoal().getTeam() != null) {
+            UUID teamId = t.getGoal().getTeam().getId();
+            boolean isMember = teamMemberRepo.findByTeamId(teamId).stream()
+                    .anyMatch(tm -> tm.getUser().getId().equals(toMemberId));
+            if (!isMember) {
+                throw new RuntimeException("Người dùng không thuộc xưởng này. Không thể chuyển giao.");
+            }
+        }
+
+        User from = t.getMember();
+
+        TaskTransfer tx = new TaskTransfer();
+        tx.setTask(t);
+        tx.setFromUser(from);
+        tx.setToUser(to);
+        tx.setActorType(actorType != null ? actorType : (actor != null ? "MANAGER" : "MEMBER"));
+        tx.setReason(reason);
+        transferRepo.save(tx);
+
+        t.setMember(to);
+        t.setAcceptanceStatus("WAITING");
+        Task saved = taskRepo.save(t);
+
+        notificationService.createAndSend(
+            to,
+            "Bạn được chuyển giao nhiệm vụ",
+            "Bạn được chuyển giao nhiệm vụ: " + t.getTitle(),
+            "TASK_TRANSFERRED",
+            t.getId()
+        );
+
+        return toDTO(saved);
+    }
+
+    public List<Map<String, Object>> getTransfers(UUID taskId) {
+        return transferRepo.findByTaskIdOrderByCreatedAtDesc(taskId).stream()
+                .map(tx -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("id", tx.getId().toString());
+                    m.put("taskId", tx.getTask().getId().toString());
+                    m.put("fromUserId", tx.getFromUser() != null ? tx.getFromUser().getId().toString() : null);
+                    m.put("fromUserName", tx.getFromUser() != null ? tx.getFromUser().getUsername() : null);
+                    m.put("toUserId", tx.getToUser().getId().toString());
+                    m.put("toUserName", tx.getToUser().getUsername());
+                    m.put("actorType", tx.getActorType());
+                    m.put("reason", tx.getReason());
+                    m.put("createdAt", tx.getCreatedAt() != null ? tx.getCreatedAt().toString() : null);
+                    return m;
+                }).collect(Collectors.toList());
+    }
+
+    public Map<String, Object> addDependency(UUID taskId, UUID dependsOnTaskId, String dependencyType) {
+        Task t = taskRepo.findById(taskId).orElseThrow(() -> new RuntimeException("Task not found"));
+        Task dep = taskRepo.findById(dependsOnTaskId).orElseThrow(() -> new RuntimeException("Dependency task not found"));
+        if (t.getId().equals(dep.getId())) {
+            throw new RuntimeException("Task không thể phụ thuộc vào chính nó");
+        }
+        TaskDependency d = new TaskDependency();
+        d.setTask(t);
+        d.setDependsOnTask(dep);
+        d.setDependencyType(dependencyType != null ? dependencyType : "FINISH_TO_START");
+        TaskDependency saved = dependencyRepo.save(d);
+
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", saved.getId().toString());
+        m.put("taskId", t.getId().toString());
+        m.put("dependsOnTaskId", dep.getId().toString());
+        m.put("dependencyType", saved.getDependencyType());
+        return m;
+    }
+
+    public List<Map<String, Object>> getDependencies(UUID taskId) {
+        return dependencyRepo.findByTaskId(taskId).stream()
+                .map(d -> {
+                    Task dep = d.getDependsOnTask();
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("id", d.getId().toString());
+                    m.put("taskId", taskId.toString());
+                    m.put("dependsOnTaskId", dep.getId().toString());
+                    m.put("dependsOnTaskTitle", dep.getTitle());
+                    m.put("dependencyType", d.getDependencyType());
+                    return m;
+                }).collect(Collectors.toList());
     }
 
     public byte[] exportSalaryExcel(UUID teamId) throws Exception {

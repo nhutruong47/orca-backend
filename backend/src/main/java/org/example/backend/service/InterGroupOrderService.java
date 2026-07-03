@@ -53,6 +53,12 @@ public class InterGroupOrderService {
                 .stream().map(this::toDTO).collect(Collectors.toList());
     }
 
+    public InterGroupOrderDTO getById(UUID orderId) {
+        InterGroupOrder order = orderRepo.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found"));
+        return toDTO(order);
+    }
+
     @Transactional
     public InterGroupOrderDTO createOrder(InterGroupOrderDTO dto, User currentUser) {
         if (dto.getBuyerTeamId() == null || dto.getBuyerTeamId().isBlank()) {
@@ -436,7 +442,7 @@ public class InterGroupOrderService {
      * Xưởng đánh dấu đã giao hàng — chuyển sang DELIVERED, chờ người mua xác nhận
      */
     @Transactional
-    public InterGroupOrderDTO completeOrder(UUID orderId, User currentUser) {
+    public InterGroupOrderDTO shipOrder(UUID orderId, User currentUser) {
         InterGroupOrder order = orderRepo.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("Order not found"));
 
@@ -467,6 +473,135 @@ public class InterGroupOrderService {
     }
 
     /**
+     * Lifecycle step: Seller marks the order as DELIVERED.
+     * Allowed transitions:
+     *   CONFIRMED -> SHIPPING -> DELIVERED (idempotent skip if already SHIPPING/DELIVERED)
+     * Only the seller (receiving team owner) can call this.
+     */
+    @Transactional
+    public InterGroupOrderDTO deliverOrder(UUID orderId, String deliveryNote, User currentUser) {
+        InterGroupOrder order = orderRepo.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found"));
+
+        String currentStatus = order.getStatus();
+        boolean allowed = "CONFIRMED".equals(currentStatus)
+                || "IN_PRODUCTION".equals(currentStatus)
+                || "QC".equals(currentStatus)
+                || "COMPLETED".equals(currentStatus)
+                || "SHIPPING".equals(currentStatus);
+        if (!allowed) {
+            throw new RuntimeException("Đơn hàng không thể chuyển sang DELIVERED từ trạng thái: " + currentStatus);
+        }
+
+        Team sellerTeam = order.getSellerTeam();
+        if (!sellerTeam.getOwner().getId().equals(currentUser.getId())) {
+            throw new RuntimeException("Chỉ chủ xưởng bán mới được đánh dấu đã giao.");
+        }
+
+        order.setStatus("DELIVERED");
+        order.setDeliveryConfirmed(false);
+        order.setBuyerViewed(false);
+        if (deliveryNote != null && !deliveryNote.isBlank()) {
+            order.setDeliveryNote(deliveryNote);
+        }
+
+        InterGroupOrder saved = orderRepo.save(order);
+
+        User buyerToNotify = resolveBuyerUser(order);
+        if (buyerToNotify != null) {
+            notifyUser(buyerToNotify,
+                    "Đơn hàng đã được giao",
+                    "Đơn hàng \"" + order.getTitle() + "\" đã được " + sellerTeam.getName() + " giao. Vui lòng xác nhận đã nhận hàng.",
+                    "ORDER_DELIVERED", null);
+        }
+
+        return toDTO(saved);
+    }
+
+    /**
+     * Lifecycle step: Buyer confirms receipt.
+     * Allowed transitions: DELIVERED -> COMPLETED.
+     * Only the buyer (team owner or personal buyer) can call this.
+     */
+    @Transactional
+    public InterGroupOrderDTO confirmDelivery(UUID orderId, String deliveryStatus, Integer rating, String comment, User currentUser) {
+        InterGroupOrder order = orderRepo.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found"));
+
+        String currentStatus = order.getStatus();
+        if (!"DELIVERED".equals(currentStatus) && !"SHIPPING".equals(currentStatus)) {
+            throw new RuntimeException("Đơn hàng chưa ở trạng thái DELIVERED để xác nhận. Hiện tại: " + currentStatus);
+        }
+
+        boolean isBuyer = (order.getBuyerTeam() != null && order.getBuyerTeam().getOwner().getId().equals(currentUser.getId()))
+                || (order.getBuyerUser() != null && order.getBuyerUser().getId().equals(currentUser.getId()));
+        if (!isBuyer) {
+            throw new RuntimeException("Chỉ bên mua mới xác nhận được giao hàng.");
+        }
+
+        if (order.getDeliveryConfirmed() != null && order.getDeliveryConfirmed()) {
+            throw new RuntimeException("Đơn này đã được xác nhận trước đó.");
+        }
+
+        String safeStatus = "ON_TIME";
+        if (deliveryStatus != null) {
+            if (!"ON_TIME".equals(deliveryStatus) && !"LATE".equals(deliveryStatus) && !"NOT_DELIVERED".equals(deliveryStatus)) {
+                throw new RuntimeException("Trạng thái giao hàng không hợp lệ.");
+            }
+            safeStatus = deliveryStatus;
+        }
+
+        int safeRating = rating == null ? 5 : rating;
+        if (safeRating < 1 || safeRating > 5) {
+            throw new RuntimeException("Đánh giá phải từ 1 đến 5 sao.");
+        }
+
+        order.setDeliveryConfirmed(true);
+        order.setDeliveryConfirmedAt(LocalDateTime.now());
+        order.setDeliveryStatus(safeStatus);
+        order.setStatus("COMPLETED");
+        order.setSellerViewed(false);
+
+        // Update seller trust stats
+        Team sellerTeam = order.getSellerTeam();
+        if ("ON_TIME".equals(safeStatus)) {
+            sellerTeam.setOnTimeOrders(sellerTeam.getOnTimeOrders() + 1);
+        } else if ("LATE".equals(safeStatus)) {
+            sellerTeam.setLateOrders(sellerTeam.getLateOrders() + 1);
+        }
+        sellerTeam.setTotalRatings(sellerTeam.getTotalRatings() + 1);
+        sellerTeam.setSumRatings(sellerTeam.getSumRatings() + safeRating);
+        sellerTeam.setCompletedOrders(sellerTeam.getCompletedOrders() + 1);
+        sellerTeam.setTotalOrders(sellerTeam.getTotalOrders() + 1);
+        teamRepo.save(sellerTeam);
+
+        Team buyer = order.getBuyerTeam();
+        if (buyer != null) {
+            buyer.setCompletedOrders(buyer.getCompletedOrders() + 1);
+            teamRepo.save(buyer);
+        }
+
+        org.example.backend.entity.Review review = new org.example.backend.entity.Review();
+        review.setOrder(order);
+        review.setBuyerTeam(order.getBuyerTeam());
+        review.setBuyerUser(order.getBuyerUser());
+        review.setSellerTeam(sellerTeam);
+        review.setRating(safeRating);
+        review.setComment(comment);
+        review.setDeliveryResult(safeStatus);
+        reviewRepo.save(review);
+
+        InterGroupOrder saved = orderRepo.save(order);
+
+        notifyUser(sellerTeam.getOwner(),
+                "Người mua xác nhận giao hàng",
+                "Đơn \"" + order.getTitle() + "\" đã được xác nhận: " + safeStatus + " | " + safeRating + " sao.",
+                "ORDER_COMPLETED", null);
+
+        return toDTO(saved);
+    }
+
+    /**
      * Người mua xác nhận đã nhận hàng + đánh giá sao.
      * Trạng thái đơn: ON_TIME / LATE / NOT_DELIVERED
      * Trust score của xưởng được cập nhật theo đánh giá.
@@ -477,8 +612,8 @@ public class InterGroupOrderService {
         InterGroupOrder order = orderRepo.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("Order not found"));
 
-        if (!"DELIVERED".equals(order.getStatus())) {
-            throw new RuntimeException("Chỉ đơn DELIVERED mới xác nhận được.");
+        if (!"DELIVERED".equals(order.getStatus()) && !"SHIPPING".equals(order.getStatus())) {
+            throw new RuntimeException("Chỉ đơn DELIVERED hoặc SHIPPING mới xác nhận được.");
         }
 
         // Verify buyer

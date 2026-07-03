@@ -24,6 +24,8 @@ public class TaskDTO {
     private String memberName;
     private String backupMemberId;
     private String backupMemberName;
+    private String supervisorId;
+    private String supervisorName;
     private LocalDateTime createdAt;
     private String teamId;
 
@@ -159,6 +161,12 @@ public class TaskDTO {
 
     public String getBackupMemberName() { return backupMemberName; }
     public void setBackupMemberName(String backupMemberName) { this.backupMemberName = backupMemberName; }
+
+    public String getSupervisorId() { return supervisorId; }
+    public void setSupervisorId(String supervisorId) { this.supervisorId = supervisorId; }
+
+    public String getSupervisorName() { return supervisorName; }
+    public void setSupervisorName(String supervisorName) { this.supervisorName = supervisorName; }
 
     public LocalDateTime getCreatedAt() {
         return createdAt;

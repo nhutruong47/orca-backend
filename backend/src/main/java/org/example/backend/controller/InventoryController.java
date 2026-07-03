@@ -1,9 +1,12 @@
 package org.example.backend.controller;
 
 import org.example.backend.dto.InventoryItemDTO;
+import org.example.backend.entity.User;
+import org.example.backend.service.AccessControlService;
 import org.example.backend.service.InventoryService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -17,8 +20,12 @@ public class InventoryController {
     @Autowired
     private InventoryService inventoryService;
 
+    @Autowired
+    private AccessControlService accessControlService;
+
     @GetMapping
-    public ResponseEntity<List<InventoryItemDTO>> getByTeam(@RequestParam UUID teamId) {
+    public ResponseEntity<List<InventoryItemDTO>> getByTeam(@RequestParam UUID teamId, @AuthenticationPrincipal User user) {
+        accessControlService.requireTeamMember(user, teamId);
         return ResponseEntity.ok(inventoryService.getByTeam(teamId));
     }
 
@@ -28,7 +35,8 @@ public class InventoryController {
     }
 
     @PostMapping
-    public ResponseEntity<?> create(@RequestBody InventoryItemDTO dto) {
+    public ResponseEntity<?> create(@RequestBody InventoryItemDTO dto, @AuthenticationPrincipal User user) {
+        accessControlService.requireTeamMember(user, UUID.fromString(dto.getTeamId()));
         try {
             return ResponseEntity.ok(inventoryService.create(dto));
         } catch (RuntimeException e) {
@@ -37,7 +45,11 @@ public class InventoryController {
     }
 
     @PatchMapping("/{id}/quantity")
-    public ResponseEntity<?> updateQuantity(@PathVariable UUID id, @RequestBody Map<String, Double> body) {
+    public ResponseEntity<?> updateQuantity(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal User user,
+            @RequestBody Map<String, Double> body) {
+        accessControlService.requireInventoryItemAccess(user, id);
         try {
             Double qty = body.get("quantity");
             if (qty == null) {
@@ -50,7 +62,8 @@ public class InventoryController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> delete(@PathVariable UUID id) {
+    public ResponseEntity<?> delete(@PathVariable UUID id, @AuthenticationPrincipal User user) {
+        accessControlService.requireInventoryItemAccess(user, id);
         try {
             inventoryService.delete(id);
             return ResponseEntity.ok(Map.of("message", "Đã xóa mặt hàng khỏi kho"));

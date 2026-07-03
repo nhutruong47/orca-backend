@@ -238,6 +238,11 @@ public class GoalService {
         };
     }
 
+    public GoalDTO getDetail(UUID id) {
+        Goal g = goalRepo.findById(id).orElseThrow(() -> new RuntimeException("Goal not found"));
+        return toDTO(g);
+    }
+
     public GoalDTO updateStatus(UUID id, String status) {
         Goal g = goalRepo.findById(id).orElseThrow(() -> new RuntimeException("Goal not found"));
         g.setStatus(status);

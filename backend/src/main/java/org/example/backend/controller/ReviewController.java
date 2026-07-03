@@ -3,6 +3,7 @@ package org.example.backend.controller;
 import org.example.backend.dto.ReviewDTO;
 import org.example.backend.entity.User;
 import org.example.backend.repository.TeamRepository;
+import org.example.backend.service.AccessControlService;
 import org.example.backend.service.ReviewService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -23,11 +24,24 @@ public class ReviewController {
     @Autowired
     private TeamRepository teamRepo;
 
+    @Autowired
+    private AccessControlService accessControlService;
+
     @GetMapping("/team/{teamId}")
-    public ResponseEntity<?> getReviewsByTeam(@PathVariable UUID teamId) {
-        return ResponseEntity.ok(reviewService.getReviewsByTeam(teamId));
+    public ResponseEntity<?> getReviewsByTeam(@PathVariable UUID teamId, @AuthenticationPrincipal User user) {
+        try {
+            accessControlService.requireTeamMember(user, teamId);
+            return ResponseEntity.ok(reviewService.getReviewsByTeam(teamId));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
+    /**
+     * Public summary used by the marketplace.
+     * Authentication is required, but only basic — no team membership check,
+     * since this is the publicly advertised trust score.
+     */
     @GetMapping("/team/{teamId}/summary")
     public ResponseEntity<?> getTeamReviewSummary(@PathVariable UUID teamId) {
         var teamOpt = teamRepo.findById(teamId);

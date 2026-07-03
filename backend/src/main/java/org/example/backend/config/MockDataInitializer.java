@@ -5,6 +5,7 @@ import org.example.backend.entity.Team;
 import org.example.backend.entity.User;
 import org.example.backend.repository.TeamRepository;
 import org.example.backend.repository.UserRepository;
+import org.example.backend.service.InventoryService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.DependsOn;
@@ -23,15 +24,18 @@ public class MockDataInitializer implements CommandLineRunner {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final String adminUsername;
+    private final InventoryService inventoryService;
 
     public MockDataInitializer(
             TeamRepository teamRepository,
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
+            InventoryService inventoryService,
             @Value("${app.default-admin.username:admin}") String adminUsername) {
         this.teamRepository = teamRepository;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.inventoryService = inventoryService;
         this.adminUsername = adminUsername;
     }
 
@@ -117,6 +121,7 @@ public class MockDataInitializer implements CommandLineRunner {
             team.setFactoryType("roastery");
             
             teamRepository.save(team);
+            inventoryService.initializeDefaultInventory(team.getId());
         }
     }
 }

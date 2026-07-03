@@ -3,8 +3,10 @@ package org.example.backend.controller;
 import org.example.backend.dto.AiParseResult;
 import org.example.backend.entity.TeamMember;
 import org.example.backend.repository.TeamMemberRepository;
+import org.example.backend.service.AccessControlService;
 import org.example.backend.service.AiServiceClient;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
@@ -17,19 +19,29 @@ public class AiController {
     private final AiServiceClient aiServiceClient;
     private final TeamMemberRepository teamMemberRepo;
     private final UserRepository userRepository;
+    private final AccessControlService accessControlService;
 
-    public AiController(AiServiceClient aiServiceClient, TeamMemberRepository teamMemberRepo, UserRepository userRepository) {
+    public AiController(AiServiceClient aiServiceClient,
+                        TeamMemberRepository teamMemberRepo,
+                        UserRepository userRepository,
+                        AccessControlService accessControlService) {
         this.aiServiceClient = aiServiceClient;
         this.teamMemberRepo = teamMemberRepo;
         this.userRepository = userRepository;
+        this.accessControlService = accessControlService;
     }
 
     /**
      * Frontend gọi trực tiếp để xem kết quả AI parse trước khi tạo Goal.
      * Giờ sẽ gửi kèm danh sách thành viên + nhãn dán để AI giao việc ngay.
+     *
+     * Authorization: user phải thuộc team mới được đọc member labels.
      */
     @PostMapping("/parse")
     public ResponseEntity<AiParseResult> parseText(@RequestBody Map<String, String> payload, @org.springframework.security.core.annotation.AuthenticationPrincipal org.example.backend.entity.User user) {
+        if (user == null) {
+            throw new AccessDeniedException("Authentication required");
+        }
         if (!user.isAiTrialActive()) {
             throw new org.springframework.web.server.ResponseStatusException(
                     org.springframework.http.HttpStatus.PAYMENT_REQUIRED,
@@ -62,7 +74,12 @@ public class AiController {
             try { teamId = java.util.UUID.fromString(teamIdStr); } catch (Exception ignored) {}
         }
 
-        // Build member context from team members' job labels
+        // Authorization: must be a team member to read inventory/labels/tasks.
+        if (teamId != null) {
+            accessControlService.validateTeamAccess(user.getId(), teamId);
+        }
+
+        // Build member context only after authorization passes.
         String memberContext = "";
         if (teamId != null) {
             List<TeamMember> members = teamMemberRepo.findByTeamId(teamId);
