@@ -38,9 +38,6 @@ public class TeamService {
     @Autowired
     private JwtUtil jwtUtil;
 
-    @Autowired
-    private InventoryService inventoryService;
-
     /**
      * Lấy tất cả nhóm mà user tham gia
      */
@@ -97,7 +94,7 @@ public class TeamService {
         ownerMember.setGroupRole(GroupRole.ADMIN);
         teamMemberRepository.save(ownerMember);
 
-        inventoryService.initializeDefaultInventory(team.getId());
+        // Inventory starts empty — owner adds products / imports later.
 
         return toDTO(team, false);
     }

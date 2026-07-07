@@ -133,30 +133,15 @@ public class InventoryService {
 
     /**
      * Initialize default inventory items for a team (4 types x 4 states).
+     *
+     * <p><b>DISABLED.</b> New teams must start with an empty inventory.
+     * This method is preserved as a no-op so existing callers (if any) do not
+     * break, but it deliberately creates no rows. Owners add products and
+     * materials through the import / create flow.
      */
     @Transactional
     public void initializeDefaultInventory(UUID teamId) {
-        if (inventoryRepo.existsByTeamId(teamId)) {
-            return;
-        }
-        Team team = teamRepo.findById(teamId)
-                .orElseThrow(() -> new RuntimeException("Team not found"));
-        String[] types = {"Arabica", "Robusta", "Culi", "Blend"};
-        String[] states = {"GREEN", "ROASTED", "GROUND", "PACKAGED"};
-        for (String type : types) {
-            for (String state : states) {
-                Optional<InventoryItem> existing = inventoryRepo.findByTeamIdAndProductTypeAndProductState(teamId, type, state);
-                if (existing.isEmpty()) {
-                    InventoryItem item = new InventoryItem();
-                    item.setTeam(team);
-                    item.setProductType(type);
-                    item.setProductState(state);
-                    item.setQuantity(0.0);
-                    item.setUnit("kg");
-                    inventoryRepo.save(item);
-                }
-            }
-        }
+        // Intentionally empty — teams start with no inventory.
     }
 
     // ========== HELPERS ==========

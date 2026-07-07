@@ -27,12 +27,14 @@ public class TaskService {
     private final AttendanceRepository attendanceRepo;
     private final TaskTransferRepository transferRepo;
     private final TaskDependencyRepository dependencyRepo;
+    private final InventoryRepository inventoryRepo;
 
     public TaskService(TaskRepository taskRepo, GoalRepository goalRepo,
             UserRepository userRepo, TaskChecklistRepository checklistRepo,
             NotificationService notificationService, TeamMemberRepository teamMemberRepo,
             AttendanceRepository attendanceRepo,
-            TaskTransferRepository transferRepo, TaskDependencyRepository dependencyRepo) {
+            TaskTransferRepository transferRepo, TaskDependencyRepository dependencyRepo,
+            InventoryRepository inventoryRepo) {
         this.taskRepo = taskRepo;
         this.goalRepo = goalRepo;
         this.userRepo = userRepo;
@@ -42,6 +44,7 @@ public class TaskService {
         this.attendanceRepo = attendanceRepo;
         this.transferRepo = transferRepo;
         this.dependencyRepo = dependencyRepo;
+        this.inventoryRepo = inventoryRepo;
     }
 
     public List<TaskDTO> getByGoal(UUID goalId) {
@@ -95,14 +98,37 @@ public class TaskService {
         return toDTO(saved);
     }
 
+    private void handleInventoryDeduction(Task t, String oldStatus) {
+        if (!"COMPLETED".equals(oldStatus) && "COMPLETED".equals(t.getStatus())) {
+            if (t.getGoal() != null && t.getGoal().getTeam() != null) {
+                double qty = t.getActualOutput() != null ? t.getActualOutput() : 
+                            (t.getWorkload() != null ? t.getWorkload() : 0.0);
+                if (qty > 0) {
+                    List<InventoryItem> items = inventoryRepo.findByTeamIdOrderByProductTypeAscProductStateAsc(t.getGoal().getTeam().getId());
+                    if (!items.isEmpty()) {
+                        InventoryItem target = items.stream()
+                            .filter(i -> t.getTitle() != null && i.getProductType() != null && 
+                                       t.getTitle().toLowerCase().contains(i.getProductType().toLowerCase()))
+                            .findFirst()
+                            .orElse(items.get(0));
+                        target.setQuantity(Math.max(0, target.getQuantity() - qty));
+                        inventoryRepo.save(target);
+                    }
+                }
+            }
+        }
+    }
+
     public TaskDTO updateProgress(UUID id, int percentage) {
         Task t = taskRepo.findById(id).orElseThrow(() -> new RuntimeException("Task not found"));
+        String oldStatus = t.getStatus();
         t.setCompletionPercentage(percentage);
         if (percentage == 100) {
             t.setStatus("COMPLETED");
         } else if (percentage > 0 && "PENDING".equals(t.getStatus())) {
             t.setStatus("IN_PROGRESS");
         }
+        handleInventoryDeduction(t, oldStatus);
         Task saved = taskRepo.save(t);
         if (saved.getGoal() != null) {
             updateGoalProgress(saved.getGoal().getId());
@@ -144,6 +170,7 @@ public class TaskService {
             t.setDeadline(dead != null ? java.time.LocalDateTime.parse(dead) : null);
         }
 
+        String oldStatus = t.getStatus();
         if (updates.containsKey("actualOutput") || updates.containsKey("outputTarget")) {
             Double target = t.getOutputTarget() != null ? t.getOutputTarget() : (t.getWorkload() != null ? t.getWorkload() : 0.0);
             Double actual = t.getActualOutput() != null ? t.getActualOutput() : 0.0;
@@ -171,6 +198,7 @@ public class TaskService {
             }
         }
 
+        handleInventoryDeduction(t, oldStatus);
         Task saved = taskRepo.save(t);
         if (saved.getGoal() != null) {
             updateGoalProgress(saved.getGoal().getId());
@@ -379,9 +407,11 @@ public class TaskService {
         int pct = items.isEmpty() ? 0 : (int) (checked * 100 / items.size());
 
         Task t = taskRepo.findById(taskId).orElseThrow();
+        String oldStatus = t.getStatus();
         t.setCompletionPercentage(pct);
         if (pct == 100)
             t.setStatus("COMPLETED");
+        handleInventoryDeduction(t, oldStatus);
         taskRepo.save(t);
 
         if (t.getGoal() != null) {

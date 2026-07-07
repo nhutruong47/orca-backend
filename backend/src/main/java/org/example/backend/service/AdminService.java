@@ -22,6 +22,8 @@ import org.example.backend.entity.SubscriptionPlan;
 import org.example.backend.entity.AiConfig;
 import org.example.backend.repository.SubscriptionPlanRepository;
 import org.example.backend.repository.AiConfigRepository;
+import org.example.backend.entity.SystemLog;
+import org.example.backend.repository.SystemLogRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -55,6 +57,7 @@ public class AdminService {
     private final PasswordEncoder passwordEncoder;
     private final SubscriptionPlanRepository planRepository;
     private final AiConfigRepository aiConfigRepository;
+    private final SystemLogRepository systemLogRepository;
 
     public AdminService(
             UserRepository userRepository,
@@ -69,7 +72,8 @@ public class AdminService {
             TaskService taskService,
             PasswordEncoder passwordEncoder,
             SubscriptionPlanRepository planRepository,
-            AiConfigRepository aiConfigRepository) {
+            AiConfigRepository aiConfigRepository,
+            SystemLogRepository systemLogRepository) {
         this.userRepository = userRepository;
         this.teamRepository = teamRepository;
         this.teamMemberRepository = teamMemberRepository;
@@ -83,6 +87,7 @@ public class AdminService {
         this.passwordEncoder = passwordEncoder;
         this.planRepository = planRepository;
         this.aiConfigRepository = aiConfigRepository;
+        this.systemLogRepository = systemLogRepository;
     }
 
     @PostConstruct
@@ -204,8 +209,40 @@ public class AdminService {
                 .limit(5)
                 .map(this::toTeamMap)
                 .toList());
+        overview.put("systemTrendData", generateSystemTrendData(payments, users, teams));
 
         return overview;
+    }
+
+    private List<Map<String, Object>> generateSystemTrendData(List<PaymentTransaction> payments, List<User> users, List<Team> teams) {
+        List<Map<String, Object>> trendData = new java.util.ArrayList<>();
+        java.time.format.DateTimeFormatter monthFormatter = java.time.format.DateTimeFormatter.ofPattern("MMM", java.util.Locale.ENGLISH);
+        LocalDateTime now = LocalDateTime.now();
+
+        for (int i = 5; i >= 0; i--) {
+            LocalDateTime monthStart = now.minusMonths(i).withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0).withNano(0);
+            LocalDateTime monthEnd = monthStart.plusMonths(1);
+            
+            long revenue = payments.stream()
+                .filter(this::isPaidPayment)
+                .filter(p -> {
+                    LocalDateTime dt = p.getPaidAt() != null ? p.getPaidAt() : p.getCreatedAt();
+                    return dt != null && !dt.isBefore(monthStart) && dt.isBefore(monthEnd);
+                })
+                .mapToLong(PaymentTransaction::getAmount)
+                .sum();
+            
+            long companies = teams.stream().filter(t -> t.getCreatedAt() != null && t.getCreatedAt().isBefore(monthEnd)).count();
+            long userCount = users.stream().filter(u -> u.getCreatedAt() != null && u.getCreatedAt().isBefore(monthEnd)).count();
+            
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("month", monthStart.format(monthFormatter));
+            data.put("revenue", revenue / 1000000.0);
+            data.put("companies", companies);
+            data.put("users", userCount);
+            trendData.add(data);
+        }
+        return trendData;
     }
 
     private long countCreatedBetweenUsers(List<User> users, LocalDateTime start, LocalDateTime end) {
@@ -243,19 +280,15 @@ public class AdminService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> getUsers() {
-        return userRepository.findAll().stream()
-                .sorted(this::compareCreatedAtDesc)
-                .map(this::toUserMap)
-                .toList();
+    public org.springframework.data.domain.Page<Map<String, Object>> getUsers(String search, org.springframework.data.domain.Pageable pageable) {
+        return userRepository.searchUsers(search, pageable)
+                .map(this::toUserMap);
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> getTeams() {
-        return teamRepository.findAll().stream()
-                .sorted(this::compareCreatedAtDesc)
-                .map(this::toTeamMap)
-                .toList();
+    public org.springframework.data.domain.Page<Map<String, Object>> getTeams(String search, org.springframework.data.domain.Pageable pageable) {
+        return teamRepository.searchTeams(search, pageable)
+                .map(this::toTeamMap);
     }
 
     @Transactional(readOnly = true)
@@ -280,6 +313,17 @@ public class AdminService {
                 .sorted(this::comparePaidAtDesc)
                 .map(this::toPaymentMap)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<Map<String, Object>> getPayments(String search, org.springframework.data.domain.Pageable pageable) {
+        return paymentRepository.searchPayments(search, pageable)
+                .map(this::toPaymentMap);
+    }
+
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<SystemLog> getLogs(String search, org.springframework.data.domain.Pageable pageable) {
+        return systemLogRepository.searchLogs(search, pageable);
     }
 
     @Transactional
@@ -370,6 +414,9 @@ public class AdminService {
         if (details.containsKey("specialty")) team.setSpecialty(details.get("specialty"));
         if (details.containsKey("capacity")) team.setCapacity(details.get("capacity"));
         if (details.containsKey("region")) team.setRegion(details.get("region"));
+        if (details.containsKey("serviceCost")) {
+            team.setServiceCost(Double.valueOf(details.get("serviceCost")));
+        }
         return toTeamMap(teamRepository.save(team));
     }
 
@@ -523,6 +570,7 @@ public class AdminService {
         map.put("completedOrders", team.getCompletedOrders());
         map.put("cancelledOrders", team.getCancelledOrders());
         map.put("totalOrders", team.getTotalOrders());
+        map.put("serviceCost", team.getServiceCost() != null ? team.getServiceCost() : 0.0);
         map.put("trustScore", team.getTotalOrders() > 0
                 ? (int) ((double) team.getCompletedOrders() / team.getTotalOrders() * 100)
                 : 0);

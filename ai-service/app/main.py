@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.gemini_ai import GeminiExtractError, GeminiPlanError, GeminiPlanInputError, GeminiReviseError
@@ -10,8 +11,21 @@ from app.mock_ai import plan as mock_plan
 from app.mock_ai import revise as mock_revise
 from app.models import ExtractRequest, ExtractResponse, PlanDraftResponse, PlanRequest, ReviseRequest
 
+# RAG imports
+from app.rag.models import RAGRequest as RAGRequestModel, StandardizedAIResponse
+from app.rag.rag_service import get_rag_service
 
-app = FastAPI(title="ORCA AI Service", version="0.1.0")
+
+app = FastAPI(title="ORCA AI Service", version="0.2.0")
+
+# CORS middleware for frontend access
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Configure appropriately for production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/health")
@@ -63,13 +77,62 @@ def revise(request: ReviseRequest) -> PlanDraftResponse:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
     raise HTTPException(status_code=400, detail=f"Unsupported AI_V2_MODE: {settings.ai_v2_mode}")
 
-@app.get("/models")
-def list_models():
-    import httpx
-    url = "https://generativelanguage.googleapis.com/v1beta/models"
+
+# =============================================================================
+# RAG Endpoints (v0.2.0)
+# =============================================================================
+
+@app.post("/api/rag/query", response_model=StandardizedAIResponse)
+def rag_query(request: RAGRequestModel) -> StandardizedAIResponse:
+    """
+    Query the RAG system with a natural language question.
+    Returns a standardized response with citations.
+    """
     try:
-        resp = httpx.get(url, params={"key": settings.gemini_api_key}, timeout=10)
-        resp.raise_for_status()
-        return resp.json()
-    except Exception as e:
-        return {"error": str(e)}
+        rag_service = get_rag_service()
+        return rag_service.query(request)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.get("/api/rag/stats")
+def rag_stats() -> dict:
+    """
+    Get RAG system statistics.
+    """
+    try:
+        rag_service = get_rag_service()
+        return rag_service.get_stats()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/api/rag/index/{source_type}")
+def rag_index(source_type: str) -> dict:
+    """
+    Trigger reindexing for a source type.
+    Admin only - would need authentication in production.
+    """
+    # This would trigger async indexing job
+    return {
+        "status": "indexing_started",
+        "source": source_type,
+        "message": f"Reindexing for source '{source_type}' has been queued."
+    }
+
+
+@app.get("/api/rag/sources")
+def rag_sources() -> dict:
+    """
+    List all indexed knowledge sources.
+    """
+    try:
+        rag_service = get_rag_service()
+        stats = rag_service.get_stats()
+        return {
+            "sources": list(stats.get("sources", {}).keys()),
+            "documents_by_source": stats.get("sources", {}),
+            "total_documents": stats.get("documents_indexed", 0)
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc

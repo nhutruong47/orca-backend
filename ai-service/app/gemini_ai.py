@@ -192,9 +192,10 @@ Hard rules:
 - deadline must be copied from extracted fields.deadline exactly when present.
 - priority must be an integer: 1 lowest, 3 medium, 5 highest.
 - workload is estimated effort hours, must be greater than 0.
-- suggestedAssigneeId should strongly be suggested using one of the provided team member userId values.
-- If no perfectly matching member exists, you can still suggest an assignee if their jobLabels are somewhat related, or if it is a general task.
-- Match members to tasks based on their jobLabels (e.g. "Rang xay" matches roasting tasks).
+- suggestedAssigneeId is optional and must be one of the provided team member userId values.
+- If no suitable member exists, set suggestedAssigneeId and suggestedAssigneeName to null.
+- A member with empty jobLabels is not suitable for any specialized task.
+- Only suggest a member when their jobLabels semantically match the task.
 - Never invent a person, username, full name, or userId.
 - suggestedAssigneeName must match the selected member's fullName when available, otherwise username.
 - Keep the draft in Vietnamese.
@@ -395,7 +396,8 @@ def _normalize_revise_output(draft: PlanDraftResponse, request: ReviseRequest) -
     draft.outputTarget = original.outputTarget
     draft.deadline = original.deadline
     draft.priority = original.priority
-    draft.tasks = [task.model_copy(deep=True) for task in original.tasks]
+    if not _is_task_revision_instruction(instruction):
+        draft.tasks = [task.model_copy(deep=True) for task in original.tasks]
     return draft
 
 
@@ -442,6 +444,44 @@ def _revise_with_safe_rule(request: ReviseRequest) -> PlanDraftResponse | None:
             task.suggestedReason = "Phù hợp vì có nhãn QC/kiểm tra chất lượng."
         draft.tasks.append(task)
         return draft
+
+    added_task_title = _requested_added_task_title(instruction)
+    if added_task_title is not None:
+        draft = original.model_copy(deep=True)
+        task = TaskDraft(
+            title=added_task_title,
+            description=f"Thực hiện công việc {added_task_title.lower()} theo yêu cầu của kế hoạch.",
+            priority=3,
+            workload=1.0,
+        )
+        normalized_title = _normalize_match_text(added_task_title)
+        if _mentions_any(normalized_title, ["van chuyen", "giao hang", "ban giao", "logistics"]):
+            assignee = _find_member_by_labels(
+                {member.userId: member for member in request.members},
+                ["van chuyen", "giao hang", "logistics", "kho", "ship"],
+            )
+            task = _assign_if_found(task, assignee, "Phù hợp vì có nhãn vận chuyển/kho/giao hàng.")
+        draft.tasks.append(task)
+        return draft
+
+    removed_task_query = _requested_removed_task_query(instruction)
+    if removed_task_query is not None:
+        task_index = _find_task_index_by_query(original.tasks, removed_task_query)
+        if task_index is not None:
+            draft = original.model_copy(deep=True)
+            draft.tasks.pop(task_index)
+            return draft
+
+    renamed_task = _requested_renamed_task(instruction)
+    if renamed_task is not None:
+        current_title, new_title = renamed_task
+        task_index = _find_task_index_by_query(original.tasks, current_title)
+        if task_index is not None:
+            draft = original.model_copy(deep=True)
+            task = draft.tasks[task_index]
+            task.title = new_title
+            task.description = f"Thực hiện công việc {new_title.lower()} theo yêu cầu đã cập nhật."
+            return draft
 
     if _mentions_any(instruction, ["tach"]) and _mentions_any(instruction, ["dong goi"]):
         packaging_index = _find_packaging_task_index(original.tasks)
@@ -639,6 +679,100 @@ def _requested_task_count(instruction: str) -> int | None:
     if not match:
         return None
     return max(1, int(match.group(1)))
+
+
+def _requested_added_task_title(instruction: str) -> str | None:
+    if "them" not in instruction:
+        return None
+
+    patterns = [
+        r"\bthem(?:\s+\d+)?\s+(?:muc|task|cong viec)(?:\s+nua)?(?:\s+(?:la|ve|cho))?\s*[:\-]?\s*(.+)$",
+        r"\bthem\s+(?:muc|task|cong viec)\s*[:\-]\s*(.+)$",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, instruction)
+        if not match:
+            continue
+        title = match.group(1).strip(" .,:;-")
+        title = re.sub(r"^(?:muc|task|cong viec)\s*(?:so)?\s*\d+\s*(?:la|:|-)?\s*", "", title).strip()
+        if not title or title in {"nua", "moi", "mot muc", "mot task", "mot cong viec"}:
+            return None
+        return _format_task_title(title)
+    return None
+
+
+def _requested_removed_task_query(instruction: str) -> str | None:
+    patterns = [
+        r"\b(?:xoa|bo|loai bo)(?:\s+di)?\s+(?:muc|task|cong viec)?\s*[:\-]?\s*(.+)$",
+        r"\b(?:xoa|bo)\s+(.+?)\s+(?:di|ra khoi danh sach)$",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, instruction)
+        if match:
+            query = match.group(1).strip(" .,:;-")
+            if query:
+                return query
+    return None
+
+
+def _requested_renamed_task(instruction: str) -> tuple[str, str] | None:
+    patterns = [
+        r"\b(?:doi ten|sua|doi)\s+(?:muc|task|cong viec)?\s*(.+?)\s+(?:thanh|sang)\s+(.+)$",
+        r"\b(?:muc|task|cong viec)\s+(.+?)\s+(?:doi|sua)\s+(?:thanh|sang)\s+(.+)$",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, instruction)
+        if not match:
+            continue
+        current_title = match.group(1).strip(" .,:;-")
+        new_title = match.group(2).strip(" .,:;-")
+        if current_title and new_title:
+            return current_title, _format_task_title(new_title)
+    return None
+
+
+def _find_task_index_by_query(tasks: list[TaskDraft], query: str) -> int | None:
+    normalized_query = _normalize_match_text(query)
+    if not normalized_query:
+        return None
+
+    number_match = re.fullmatch(r"(?:muc|task|cong viec)?\s*(?:so)?\s*(\d+)", normalized_query)
+    if number_match:
+        requested_index = int(number_match.group(1)) - 1
+        return requested_index if 0 <= requested_index < len(tasks) else None
+
+    if normalized_query in {"cuoi", "muc cuoi", "task cuoi", "cong viec cuoi"}:
+        return len(tasks) - 1 if tasks else None
+
+    for index, task in enumerate(tasks):
+        if normalized_query in _normalize_match_text(task.title):
+            return index
+    for index, task in enumerate(tasks):
+        if normalized_query in _normalize_match_text(task_scope_text_for_matching(task)):
+            return index
+    return None
+
+
+def _format_task_title(value: str) -> str:
+    normalized = _normalize_match_text(value).strip()
+    known_titles = {
+        "van chuyen": "Vận chuyển",
+        "giao hang": "Giao hàng",
+        "giao hang thanh pham": "Giao hàng thành phẩm",
+        "ban giao": "Bàn giao",
+        "dong goi": "Đóng gói",
+        "kiem tra chat luong": "Kiểm tra chất lượng",
+    }
+    if normalized in known_titles:
+        return known_titles[normalized]
+    return value[0].upper() + value[1:]
+
+
+def _is_task_revision_instruction(instruction: str) -> bool:
+    return _mentions_any(
+        instruction,
+        ["them", "xoa", "bo", "loai bo", "sua", "doi", "tach", "task", "cong viec", "muc"],
+    )
 
 
 def _requested_deadline(instruction: str) -> str | None:
@@ -851,7 +985,7 @@ def _generate_json_object_with_gemini_api(prompt: str, max_output_tokens: int, e
     }
 
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{settings.gemini_model}:generateContent"
-    max_retries = 3
+    max_retries = 5
     for attempt in range(max_retries):
         try:
             response = httpx.post(
@@ -865,14 +999,14 @@ def _generate_json_object_with_gemini_api(prompt: str, max_output_tokens: int, e
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code in {429, 503} and attempt < max_retries - 1:
                 import time
-                time.sleep(2)
+                time.sleep(2 ** attempt)  # Exponential backoff: 1s, 2s, 4s, 8s...
                 continue
             body = exc.response.text[:1000]
             raise error_cls(f"Gemini API returned HTTP {exc.response.status_code}: {body}") from exc
         except httpx.RequestError as exc:
             if attempt < max_retries - 1:
                 import time
-                time.sleep(2)
+                time.sleep(2 ** attempt)
                 continue
             raise error_cls(f"Cannot reach Gemini API: {exc}") from exc
 

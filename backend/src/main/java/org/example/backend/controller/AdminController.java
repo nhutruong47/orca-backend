@@ -37,13 +37,17 @@ public class AdminController {
     }
 
     @GetMapping("/users")
-    public ResponseEntity<List<Map<String, Object>>> getUsers() {
-        return ResponseEntity.ok(adminService.getUsers());
+    public ResponseEntity<org.springframework.data.domain.Page<Map<String, Object>>> getUsers(
+            @org.springframework.web.bind.annotation.RequestParam(required = false, defaultValue = "") String search,
+            org.springframework.data.domain.Pageable pageable) {
+        return ResponseEntity.ok(adminService.getUsers(search, pageable));
     }
 
     @GetMapping("/teams")
-    public ResponseEntity<List<Map<String, Object>>> getTeams() {
-        return ResponseEntity.ok(adminService.getTeams());
+    public ResponseEntity<org.springframework.data.domain.Page<Map<String, Object>>> getTeams(
+            @org.springframework.web.bind.annotation.RequestParam(required = false, defaultValue = "") String search,
+            org.springframework.data.domain.Pageable pageable) {
+        return ResponseEntity.ok(adminService.getTeams(search, pageable));
     }
 
     @GetMapping("/orders")
@@ -57,8 +61,17 @@ public class AdminController {
     }
 
     @GetMapping("/payments")
-    public ResponseEntity<List<Map<String, Object>>> getPayments() {
-        return ResponseEntity.ok(adminService.getPayments());
+    public ResponseEntity<org.springframework.data.domain.Page<Map<String, Object>>> getPayments(
+            @org.springframework.web.bind.annotation.RequestParam(required = false, defaultValue = "") String search,
+            org.springframework.data.domain.Pageable pageable) {
+        return ResponseEntity.ok(adminService.getPayments(search, pageable));
+    }
+
+    @GetMapping("/logs")
+    public ResponseEntity<org.springframework.data.domain.Page<org.example.backend.entity.SystemLog>> getLogs(
+            @org.springframework.web.bind.annotation.RequestParam(required = false, defaultValue = "") String search,
+            org.springframework.data.domain.Pageable pageable) {
+        return ResponseEntity.ok(adminService.getLogs(search, pageable));
     }
 
     @PostMapping("/users")

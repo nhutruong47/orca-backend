@@ -133,6 +133,9 @@ public class Team {
     @Column(name = "review_count")
     private Integer reviewCount;
 
+    @Column(name = "service_cost", columnDefinition = "double precision default 0.0")
+    private Double serviceCost = 0.0;
+
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();
@@ -460,5 +463,13 @@ public class Team {
 
     public void setReviewCount(Integer reviewCount) {
         this.reviewCount = reviewCount;
+    }
+
+    public Double getServiceCost() {
+        return serviceCost;
+    }
+
+    public void setServiceCost(Double serviceCost) {
+        this.serviceCost = serviceCost;
     }
 }
