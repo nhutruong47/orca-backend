@@ -4,11 +4,16 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 
 public class ProductionOrderDTO {
     private String id;
     private String teamId;
     private String orderCode;
+    
+    @NotBlank(message = "Title is required")
     private String title;
     private String description;
     private String customerName;
@@ -17,6 +22,9 @@ public class ProductionOrderDTO {
     private String roastLevel;
     private String packageSize;
     private Integer totalPackages;
+    
+    @NotNull(message = "Output target is required")
+    @Positive(message = "Output target must be greater than 0")
     private Double outputTarget;
     private Double expectedYield;
     private Double expectedLoss;

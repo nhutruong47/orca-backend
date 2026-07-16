@@ -39,6 +39,9 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import java.io.ByteArrayOutputStream;
 import jakarta.annotation.PostConstruct;
 
 @Service
@@ -507,10 +510,38 @@ public class AdminService {
     @Transactional
     public void updateAiConfigs(Map<String, String> configs) {
         configs.forEach((key, value) -> {
-            AiConfig config = aiConfigRepository.findById(key).orElse(new AiConfig(key, value));
+            AiConfig config = aiConfigRepository.findById(key)
+                .orElse(new AiConfig(key, value));
             config.setConfigValue(value);
             aiConfigRepository.save(config);
         });
+    }
+
+    public byte[] exportAdminReportExcel() throws Exception {
+        Map<String, Object> overview = getOverview();
+        try (Workbook wb = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            Sheet sheet = wb.createSheet("Tong Quan He Thong");
+            
+            // Write overview stats
+            String[] headers = {"Chi tieu", "Gia tri"};
+            Row headerRow = sheet.createRow(0);
+            for (int i = 0; i < headers.length; i++) {
+                headerRow.createCell(i).setCellValue(headers[i]);
+            }
+
+            int rowIdx = 1;
+            sheet.createRow(rowIdx++).createCell(0).setCellValue("Tong nguoi dung");
+            sheet.getRow(rowIdx - 1).createCell(1).setCellValue(String.valueOf(overview.get("totalUsers")));
+
+            sheet.createRow(rowIdx++).createCell(0).setCellValue("Tong nhom");
+            sheet.getRow(rowIdx - 1).createCell(1).setCellValue(String.valueOf(overview.get("totalTeams")));
+
+            sheet.createRow(rowIdx++).createCell(0).setCellValue("Tong doanh thu");
+            sheet.getRow(rowIdx - 1).createCell(1).setCellValue(String.valueOf(overview.get("totalRevenue")));
+
+            wb.write(out);
+            return out.toByteArray();
+        }
     }
 
     private <T> Map<String, Long> countByStatus(List<T> items, Function<T, String> statusGetter) {

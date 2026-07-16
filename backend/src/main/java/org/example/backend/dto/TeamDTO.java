@@ -4,8 +4,14 @@ import java.util.List;
 import java.util.UUID;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
 public class TeamDTO {
     private UUID id;
+
+    @NotBlank(message = "Team name cannot be blank")
+    @Size(min = 2, max = 100, message = "Team name must be between 2 and 100 characters")
     private String name;
     private String description;
     private UUID ownerId;

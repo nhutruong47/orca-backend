@@ -1,9 +1,13 @@
 package org.example.backend.dto;
 
 import java.time.LocalDateTime;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 
 public class TaskDTO {
     private String id;
+    
+    @NotBlank(message = "Title is required")
     private String title;
     private String description;
     private Integer priority;
@@ -18,7 +22,10 @@ public class TaskDTO {
     private LocalDateTime deadline;
     private String productionStage;
     private LocalDateTime dueTime;
+    
+    @NotBlank(message = "Goal ID is required")
     private String goalId;
+    
     private String goalTitle;
     private String memberId;
     private String memberName;

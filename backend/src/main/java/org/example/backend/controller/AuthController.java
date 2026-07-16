@@ -4,6 +4,7 @@ import org.example.backend.dto.LoginRequest;
 import org.example.backend.dto.RegisterRequest;
 import org.example.backend.dto.ChangePasswordRequest;
 import org.example.backend.dto.ResetPasswordRequest;
+import org.example.backend.dto.ForgotPasswordRequest;
 import org.example.backend.dto.UpdateProfileRequest;
 import org.example.backend.entity.User;
 import org.example.backend.service.AuthService;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.HashMap;
@@ -34,7 +36,7 @@ public class AuthController {
     private AuthService authService;
 
     @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody RegisterRequest request) {
+    public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest request) {
         try {
             return ResponseEntity.ok(authService.register(request));
         } catch (RuntimeException e) {
@@ -43,7 +45,7 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody LoginRequest request) {
+    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request) {
         try {
             return ResponseEntity.ok(authService.login(request));
         } catch (AuthenticationException e) {
@@ -57,6 +59,9 @@ public class AuthController {
 
     @PutMapping("/profile")
     public ResponseEntity<?> updateProfile(@AuthenticationPrincipal User user, @RequestBody UpdateProfileRequest request) {
+        if (user == null) {
+            return ResponseEntity.status(401).body(Map.of("error", "Authentication required"));
+        }
         try {
             return ResponseEntity.ok(authService.updateProfile(user, request));
         } catch (RuntimeException e) {
@@ -68,6 +73,9 @@ public class AuthController {
     public ResponseEntity<?> changePassword(
             @AuthenticationPrincipal User user,
             @RequestBody ChangePasswordRequest request) {
+        if (user == null) {
+            return ResponseEntity.status(401).body(Map.of("error", "Authentication required"));
+        }
         try {
             authService.changePassword(user, request);
             return ResponseEntity.ok(Map.of("message", "Đổi mật khẩu thành công."));
@@ -76,20 +84,23 @@ public class AuthController {
         }
     }
 
+    @PostMapping("/password/forgot")
+    public ResponseEntity<?> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        authService.forgotPassword(request);
+        return ResponseEntity.ok(Map.of("message", "Nếu email tồn tại, link khôi phục đã được gửi."));
+    }
+
     @PostMapping("/password/reset")
-    public ResponseEntity<?> resetPassword(
-            @AuthenticationPrincipal User user,
-            @RequestBody ResetPasswordRequest request) {
-        try {
-            authService.resetPassword(user, request);
-            return ResponseEntity.ok(Map.of("message", "Đặt lại mật khẩu thành công."));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+    public ResponseEntity<?> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        authService.resetPassword(request);
+        return ResponseEntity.ok(Map.of("message", "Đặt lại mật khẩu thành công."));
     }
 
     @GetMapping("/me")
     public ResponseEntity<?> getCurrentUser(@AuthenticationPrincipal User user) {
+        if (user == null) {
+            return ResponseEntity.status(401).body(Map.of("error", "Authentication required"));
+        }
         Map<String, Object> info = new HashMap<>();
         info.put("id", user.getId().toString());
         info.put("username", user.getUsername());
@@ -105,15 +116,18 @@ public class AuthController {
 
     @GetMapping("/trial-status")
     public ResponseEntity<?> getTrialStatus(@AuthenticationPrincipal User user) {
+        if (user == null) {
+            return ResponseEntity.status(401).body(Map.of("error", "Authentication required"));
+        }
         Map<String, Object> status = new HashMap<>();
-        status.put("aiTrialActive", true); // Bỏ chặn UI frontend
+        status.put("aiTrialActive", user.isAiTrialActive());
         status.put("daysRemaining", user.getAiTrialDaysRemaining());
         status.put("aiUsageCount", user.getAiUsageCount());
         status.put("aiPlan", user.getAiPlan() != null ? user.getAiPlan() : "free");
-        
+
         int maxUsage = 10;
         if ("enterprise".equalsIgnoreCase(user.getAiPlan())) {
-            maxUsage = -1; // unlimited
+            maxUsage = -1;
         } else if ("professional".equalsIgnoreCase(user.getAiPlan()) || "plus".equalsIgnoreCase(user.getAiPlan())) {
             maxUsage = 100;
         }

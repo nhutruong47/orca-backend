@@ -8,6 +8,7 @@ import org.example.backend.service.ProductionOrderService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 
 import java.util.List;
 import java.util.Map;
@@ -49,42 +50,30 @@ public class ProductionOrderController {
     public ResponseEntity<?> createOrder(
             @PathVariable UUID teamId,
             @AuthenticationPrincipal User user,
-            @RequestBody Map<String, Object> body) {
+            @Valid @RequestBody ProductionOrderDTO dto) {
         accessControlService.requireTeamMember(user, teamId);
-        try {
-            ProductionOrder raw = mapToOrder(body);
-            ProductionOrder created = orderService.createOrder(teamId, raw);
-            return ResponseEntity.ok(orderService.toDTO(created));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        ProductionOrder raw = mapToOrder(dto);
+        ProductionOrder created = orderService.createOrder(teamId, raw);
+        return ResponseEntity.ok(orderService.toDTO(created));
     }
 
     @GetMapping("/orders/{orderId}")
     public ResponseEntity<?> getOrder(@PathVariable UUID orderId, @AuthenticationPrincipal User user) {
         accessControlService.requireProductionOrderAccess(user, orderId);
-        try {
-            ProductionOrder order = orderService.getById(orderId);
-            return ResponseEntity.ok(orderService.toDTO(order));
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
+        ProductionOrder order = orderService.getById(orderId);
+        return ResponseEntity.ok(orderService.toDTO(order));
     }
 
     @PatchMapping("/orders/{orderId}")
     public ResponseEntity<?> updateOrder(
             @PathVariable UUID orderId,
             @AuthenticationPrincipal User user,
-            @RequestBody Map<String, Object> body) {
+            @RequestBody ProductionOrderDTO dto) {
         accessControlService.requireProductionOrderAccess(user, orderId);
-        try {
-            ProductionOrder raw = mapToOrder(body);
-            raw.setStatus(getString(body, "status"));
-            ProductionOrder updated = orderService.updateOrder(orderId, raw);
-            return ResponseEntity.ok(orderService.toDTO(updated));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        ProductionOrder raw = mapToOrder(dto);
+        raw.setStatus(dto.getStatus());
+        ProductionOrder updated = orderService.updateOrder(orderId, raw);
+        return ResponseEntity.ok(orderService.toDTO(updated));
     }
 
     @PatchMapping("/orders/{orderId}/status")
@@ -93,23 +82,15 @@ public class ProductionOrderController {
             @AuthenticationPrincipal User user,
             @RequestBody Map<String, String> body) {
         accessControlService.requireProductionOrderAccess(user, orderId);
-        try {
-            ProductionOrder updated = orderService.updateStatus(orderId, body.get("status"));
-            return ResponseEntity.ok(orderService.toDTO(updated));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        ProductionOrder updated = orderService.updateStatus(orderId, body.get("status"));
+        return ResponseEntity.ok(orderService.toDTO(updated));
     }
 
     @DeleteMapping("/orders/{orderId}")
     public ResponseEntity<?> deleteOrder(@PathVariable UUID orderId, @AuthenticationPrincipal User user) {
         accessControlService.requireProductionOrderAccess(user, orderId);
-        try {
-            orderService.deleteOrder(orderId);
-            return ResponseEntity.noContent().build();
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        orderService.deleteOrder(orderId);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/teams/{teamId}/orders/active")
@@ -122,53 +103,37 @@ public class ProductionOrderController {
         return ResponseEntity.ok(dtos);
     }
 
-    private ProductionOrder mapToOrder(Map<String, Object> body) {
+    private ProductionOrder mapToOrder(ProductionOrderDTO body) {
         ProductionOrder o = new ProductionOrder();
-        o.setTitle(getString(body, "title"));
-        o.setDescription(getString(body, "description"));
-        o.setCustomerName(getString(body, "customerName"));
-        o.setProductType(getString(body, "productType"));
-        o.setProcessType(getString(body, "processType"));
-        o.setRoastLevel(getString(body, "roastLevel"));
-        o.setPackageSize(getString(body, "packageSize"));
-        o.setTotalPackages(getInt(body, "totalPackages"));
-        o.setOutputTarget(getDouble(body, "outputTarget"));
-        o.setExpectedYield(getDouble(body, "expectedYield"));
-        o.setExpectedLoss(getDouble(body, "expectedLoss"));
-        o.setUnit(getString(body, "unit"));
-        o.setOrderDate(getLocalDate(body, "orderDate"));
-        o.setConfirmDate(getLocalDate(body, "confirmDate"));
-        o.setProductionStartDate(getLocalDate(body, "productionStartDate"));
-        o.setCustomerDeliveryDate(getLocalDate(body, "customerDeliveryDate"));
-        o.setSafetyBufferDays(getInt(body, "safetyBufferDays"));
-        o.setRecipientName(getString(body, "recipientName"));
-        o.setRecipientPhone(getString(body, "recipientPhone"));
-        o.setShippingNote(getString(body, "shippingNote"));
+        if (body.getTitle() != null) o.setTitle(body.getTitle());
+        if (body.getDescription() != null) o.setDescription(body.getDescription());
+        if (body.getCustomerName() != null) o.setCustomerName(body.getCustomerName());
+        if (body.getProductType() != null) o.setProductType(body.getProductType());
+        if (body.getProcessType() != null) o.setProcessType(body.getProcessType());
+        if (body.getRoastLevel() != null) o.setRoastLevel(body.getRoastLevel());
+        if (body.getPackageSize() != null) o.setPackageSize(body.getPackageSize());
+        if (body.getTotalPackages() != null) o.setTotalPackages(body.getTotalPackages());
+        if (body.getOutputTarget() != null) o.setOutputTarget(body.getOutputTarget());
+        if (body.getExpectedYield() != null) o.setExpectedYield(body.getExpectedYield());
+        if (body.getExpectedLoss() != null) o.setExpectedLoss(body.getExpectedLoss());
+        if (body.getUnit() != null) o.setUnit(body.getUnit());
+        if (body.getOrderDate() != null) o.setOrderDate(body.getOrderDate());
+        if (body.getConfirmDate() != null) o.setConfirmDate(body.getConfirmDate());
+        if (body.getProductionStartDate() != null) o.setProductionStartDate(body.getProductionStartDate());
+        if (body.getCustomerDeliveryDate() != null) o.setCustomerDeliveryDate(body.getCustomerDeliveryDate());
+        if (body.getSafetyBufferDays() != null) o.setSafetyBufferDays(body.getSafetyBufferDays());
+        if (body.getRecipientName() != null) o.setRecipientName(body.getRecipientName());
+        if (body.getRecipientPhone() != null) o.setRecipientPhone(body.getRecipientPhone());
+        if (body.getShippingNote() != null) o.setShippingNote(body.getShippingNote());
+        if (body.getContactPhoneAlt() != null) o.setContactPhoneAlt(body.getContactPhoneAlt());
+        if (body.getDeliveryAddress() != null) o.setDeliveryAddress(body.getDeliveryAddress());
+        if (body.getPreferredDeliveryFrom() != null) o.setPreferredDeliveryFrom(body.getPreferredDeliveryFrom());
+        if (body.getPreferredDeliveryTo() != null) o.setPreferredDeliveryTo(body.getPreferredDeliveryTo());
+        if (body.getDeliveryFailureAction() != null) o.setDeliveryFailureAction(body.getDeliveryFailureAction());
+        if (body.getDeliveryNote() != null) o.setDeliveryNote(body.getDeliveryNote());
+        if (body.getCancelRequested() != null) o.setCancelRequested(body.getCancelRequested());
+        if (body.getBuyerViewed() != null) o.setBuyerViewed(body.getBuyerViewed());
+        if (body.getSellerViewed() != null) o.setSellerViewed(body.getSellerViewed());
         return o;
-    }
-
-    private String getString(Map<String, Object> body, String key) {
-        Object v = body.get(key);
-        return v != null ? v.toString() : null;
-    }
-
-    private Double getDouble(Map<String, Object> body, String key) {
-        Object v = body.get(key);
-        if (v == null) return null;
-        if (v instanceof Number) return ((Number) v).doubleValue();
-        try { return Double.parseDouble(v.toString()); } catch (Exception e) { return null; }
-    }
-
-    private Integer getInt(Map<String, Object> body, String key) {
-        Object v = body.get(key);
-        if (v == null) return null;
-        if (v instanceof Number) return ((Number) v).intValue();
-        try { return Integer.parseInt(v.toString()); } catch (Exception e) { return null; }
-    }
-
-    private java.time.LocalDate getLocalDate(Map<String, Object> body, String key) {
-        Object v = body.get(key);
-        if (v == null) return null;
-        try { return java.time.LocalDate.parse(v.toString().substring(0, 10)); } catch (Exception e) { return null; }
     }
 }

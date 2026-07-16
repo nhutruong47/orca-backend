@@ -59,6 +59,25 @@ public class TaskService {
         return taskRepo.findAll().stream().map(this::toDTO).collect(Collectors.toList());
     }
 
+    public List<TaskDTO> getAllVisibleTo(User user) {
+        if (user == null || user.getId() == null) {
+            return List.of();
+        }
+        if (user.getRole() == Role.ADMIN) {
+            return getAll();
+        }
+        List<UUID> teamIds = teamMemberRepo.findByUserId(user.getId()).stream()
+                .map(TeamMember::getTeam)
+                .map(Team::getId)
+                .collect(Collectors.toList());
+        if (teamIds.isEmpty()) {
+            return List.of();
+        }
+        return taskRepo.findByGoalTeamIdIn(teamIds).stream()
+                .map(this::toDTO)
+                .collect(Collectors.toList());
+    }
+
     public TaskDTO getById(UUID id) {
         Task t = taskRepo.findById(id).orElseThrow(() -> new RuntimeException("Task not found"));
         return toDTO(t);

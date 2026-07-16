@@ -35,10 +35,13 @@ public class PaymentController {
     }
 
     @PostMapping("/vnpay/create")
-    public ResponseEntity<Map<String, Object>> createVnpayPayment(
+    public ResponseEntity<?> createVnpayPayment(
             @AuthenticationPrincipal User user,
             @RequestBody Map<String, String> body,
             HttpServletRequest request) {
+        if (user == null) {
+            return ResponseEntity.status(401).body(Map.of("error", "Authentication required"));
+        }
         return ResponseEntity.ok(vnpayPaymentService.createPayment(
                 user,
                 body.get("planId"),
@@ -48,9 +51,12 @@ public class PaymentController {
     }
 
     @PostMapping("/mock/transfer")
-    public ResponseEntity<Map<String, Object>> createMockTransfer(
+    public ResponseEntity<?> createMockTransfer(
             @AuthenticationPrincipal User user,
             @RequestBody Map<String, String> body) {
+        if (user == null) {
+            return ResponseEntity.status(401).body(Map.of("error", "Authentication required"));
+        }
         return ResponseEntity.ok(vnpayPaymentService.createMockTransfer(
                 user,
                 body.get("planId"),
@@ -59,9 +65,12 @@ public class PaymentController {
     }
 
     @PostMapping("/virtual-qr/create")
-    public ResponseEntity<Map<String, Object>> createVirtualQrPayment(
+    public ResponseEntity<?> createVirtualQrPayment(
             @AuthenticationPrincipal User user,
             @RequestBody Map<String, String> body) {
+        if (user == null) {
+            return ResponseEntity.status(401).body(Map.of("error", "Authentication required"));
+        }
         return ResponseEntity.ok(vnpayPaymentService.createVirtualQrPayment(
                 user,
                 body.get("planId"),
@@ -70,9 +79,12 @@ public class PaymentController {
     }
 
     @PostMapping("/virtual-qr/confirm")
-    public ResponseEntity<Map<String, Object>> confirmVirtualQrPayment(
+    public ResponseEntity<?> confirmVirtualQrPayment(
             @AuthenticationPrincipal User user,
             @RequestBody Map<String, String> body) {
+        if (user == null) {
+            return ResponseEntity.status(401).body(Map.of("error", "Authentication required"));
+        }
         return ResponseEntity.ok(vnpayPaymentService.confirmVirtualQrPayment(user, body.get("txnRef")));
     }
 

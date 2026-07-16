@@ -10,7 +10,14 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "goals")
+@Table(
+    name = "goals",
+    indexes = {
+        @Index(name = "idx_goals_team_status", columnList = "team_id, status"),
+        @Index(name = "idx_goals_owner", columnList = "owner_id"),
+        @Index(name = "idx_goals_created_at", columnList = "created_at")
+    }
+)
 public class Goal {
 
     @Id
@@ -18,12 +25,12 @@ public class Goal {
     @Column(updatable = false, nullable = false)
     private UUID id;
 
-    @ManyToOne(fetch = FetchType.EAGER)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "team_id", nullable = false)
     @OnDelete(action = OnDeleteAction.CASCADE)
     private Team team;
 
-    @ManyToOne(fetch = FetchType.EAGER)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_id", nullable = false)
     @OnDelete(action = OnDeleteAction.CASCADE)
     private User owner; // Group Owner who created this goal

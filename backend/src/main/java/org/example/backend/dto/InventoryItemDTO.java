@@ -1,14 +1,27 @@
 package org.example.backend.dto;
 
 import java.time.LocalDateTime;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 
 public class InventoryItemDTO {
     private String id;
+    
+    @NotBlank(message = "Team ID is required")
     private String teamId;
+    
+    @NotBlank(message = "Product Type is required")
     private String productType;
+    
     private String productState;
+    
+    @NotBlank(message = "Display Name is required")
     private String displayName;
+    
+    @NotNull(message = "Quantity is required")
     private Double quantity;
+    
+    @NotBlank(message = "Unit is required")
     private String unit;
     private Double lowStockThreshold;
     private String status;

@@ -1,78 +1,69 @@
 package org.example.backend.controller;
 
 import org.example.backend.dto.TeamDTO;
+import org.example.backend.entity.User;
+import org.example.backend.service.AccessControlService;
 import org.example.backend.service.TeamService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/teams")
 public class TeamController {
 
-    @Autowired
-    private TeamService teamService;
+    private final TeamService teamService;
+    private final AccessControlService accessControlService;
 
-    /** Lấy danh sách nhóm của user hiện tại */
-    @GetMapping
-    public ResponseEntity<?> getMyTeams(Authentication auth) {
-        try {
-            return ResponseEntity.ok(teamService.getTeamsForUser(auth.getName()));
-        } catch (Exception e) {
-            e.printStackTrace();
-            return ResponseEntity.badRequest().body(Map.of("error", e.getClass().getSimpleName() + ": " + e.getMessage()));
-        }
+    public TeamController(TeamService teamService, AccessControlService accessControlService) {
+        this.teamService = teamService;
+        this.accessControlService = accessControlService;
     }
 
-    /** Lấy danh sách tất cả các nhóm (cho Marketplace) */
+    @GetMapping
+    public ResponseEntity<?> getMyTeams(Authentication auth) {
+        return ResponseEntity.ok(teamService.getTeamsForUser(auth.getName()));
+    }
+
     @GetMapping("/all")
     public ResponseEntity<List<TeamDTO>> getAllTeams() {
         return ResponseEntity.ok(teamService.getAllTeams());
     }
 
-    /** Xem chi tiết nhóm */
     @GetMapping("/{id}")
-    public ResponseEntity<TeamDTO> getTeamDetail(@PathVariable UUID id) {
+    public ResponseEntity<?> getTeamDetail(@PathVariable UUID id, @AuthenticationPrincipal User user) {
+        accessControlService.requireTeamMember(user, id);
         return ResponseEntity.ok(teamService.getTeamDetail(id));
     }
 
-    /** Tạo nhóm mới */
     @PostMapping
-    public ResponseEntity<TeamDTO> createTeam(@RequestBody TeamDTO dto, Authentication auth) {
+    public ResponseEntity<TeamDTO> createTeam(@Valid @RequestBody TeamDTO dto, Authentication auth) {
         return ResponseEntity.ok(teamService.createTeam(dto, auth.getName()));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<?> updateTeam(@PathVariable UUID id, @RequestBody TeamDTO dto, Authentication auth) {
-        try {
-            return ResponseEntity.ok(teamService.updateTeam(id, dto, auth.getName()));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+    public ResponseEntity<?> updateTeam(@PathVariable UUID id, @Valid @RequestBody TeamDTO dto, Authentication auth) {
+        return ResponseEntity.ok(teamService.updateTeam(id, dto, auth.getName()));
     }
 
-    /** Tham gia nhóm bằng Invite Code */
     @PostMapping("/join")
     public ResponseEntity<?> joinByCode(@RequestBody Map<String, String> body, Authentication auth) {
         String code = body.get("inviteCode");
         if (code == null || code.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "Mã mời không được để trống"));
         }
-        try {
-            TeamDTO team = teamService.joinByCode(code, auth.getName());
-            return ResponseEntity.ok(team);
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        TeamDTO team = teamService.joinByCode(code, auth.getName());
+        return ResponseEntity.ok(team);
     }
 
     @PostMapping("/{id}/members")
-    public ResponseEntity<Map<String, String>> addMember(
+    public ResponseEntity<?> addMember(
             @PathVariable UUID id,
             @RequestBody Map<String, String> body,
             Authentication auth) {
@@ -80,17 +71,12 @@ public class TeamController {
         if (email == null || email.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "Email is required"));
         }
-        try {
-            Map<String, String> result = teamService.addMemberByEmail(id, email, auth.getName());
-            return ResponseEntity.ok(result);
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        Map<String, String> result = teamService.addMemberByEmail(id, email, auth.getName());
+        return ResponseEntity.ok(result);
     }
 
-    /** Xóa thành viên (chỉ Owner) */
     @DeleteMapping("/{teamId}/members/{userId}")
-    public ResponseEntity<Void> removeMember(
+    public ResponseEntity<?> removeMember(
             @PathVariable UUID teamId,
             @PathVariable UUID userId,
             Authentication auth) {
@@ -98,51 +84,43 @@ public class TeamController {
         return ResponseEntity.ok().build();
     }
 
-    /** Cập nhật nhãn công việc của thành viên */
     @PutMapping("/{teamId}/members/{userId}/labels")
-    public ResponseEntity<List<String>> updateMemberLabels(
+    public ResponseEntity<?> updateMemberLabels(
             @PathVariable UUID teamId,
             @PathVariable UUID userId,
             @RequestBody Map<String, List<String>> body,
-            Authentication auth) {
+            @AuthenticationPrincipal User user) {
+        accessControlService.requireTeamMember(user, teamId);
         List<String> labels = body.getOrDefault("labels", List.of());
-        List<String> updatedLabels = teamService.updateMemberLabels(teamId, userId, labels, auth.getName());
+        List<String> updatedLabels = teamService.updateMemberLabels(teamId, userId, labels, user.getUsername());
         return ResponseEntity.ok(updatedLabels);
     }
 
-    /** Xóa nhóm (chỉ Owner) */
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteTeam(@PathVariable UUID id, Authentication auth) {
+    public ResponseEntity<?> deleteTeam(@PathVariable UUID id, Authentication auth) {
         teamService.deleteTeam(id, auth.getName());
         return ResponseEntity.ok().build();
     }
 
-    /** Bật quảng cáo (Publish) */
     @PutMapping("/{id}/advertise")
-    public ResponseEntity<TeamDTO> advertiseTeam(
+    public ResponseEntity<?> advertiseTeam(
             @PathVariable UUID id,
             @RequestBody TeamDTO dto,
             Authentication auth) {
         return ResponseEntity.ok(teamService.advertiseTeam(id, dto, auth.getName()));
     }
 
-    /** Tắt quảng cáo (Unpublish) */
     @PutMapping("/{id}/unpublish")
-    public ResponseEntity<Void> unpublishTeam(@PathVariable UUID id, Authentication auth) {
+    public ResponseEntity<?> unpublishTeam(@PathVariable UUID id, Authentication auth) {
         teamService.unpublishTeam(id, auth.getName());
         return ResponseEntity.ok().build();
     }
 
-    /** Gá»­i há»“ sÆ¡ xÃ¡c minh xÆ°á»Ÿng cho Admin duyá»‡t */
     @PutMapping("/{id}/verification")
     public ResponseEntity<?> submitVerification(
             @PathVariable UUID id,
             @RequestBody TeamDTO dto,
             Authentication auth) {
-        try {
-            return ResponseEntity.ok(teamService.submitVerification(id, dto, auth.getName()));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        return ResponseEntity.ok(teamService.submitVerification(id, dto, auth.getName()));
     }
 }

@@ -2,6 +2,7 @@ package org.example.backend.controller;
 
 import org.example.backend.dto.ChatMessageDTO;
 import org.example.backend.entity.User;
+import org.example.backend.service.AccessControlService;
 import org.example.backend.service.ChatService;
 import org.example.backend.service.NotificationService;
 import org.example.backend.service.PresenceService;
@@ -20,49 +21,68 @@ public class ChatController {
     private final SimpMessagingTemplate messagingTemplate;
     private final PresenceService presenceService;
     private final NotificationService notificationService;
+    private final AccessControlService accessControlService;
 
     public ChatController(ChatService chatService, SimpMessagingTemplate messagingTemplate,
-                          PresenceService presenceService, NotificationService notificationService) {
+                          PresenceService presenceService, NotificationService notificationService,
+                          AccessControlService accessControlService) {
         this.chatService = chatService;
         this.messagingTemplate = messagingTemplate;
         this.presenceService = presenceService;
         this.notificationService = notificationService;
+        this.accessControlService = accessControlService;
     }
 
-    /** Get group chat messages */
     @GetMapping("/teams/{teamId}/chat")
-    public ResponseEntity<List<ChatMessageDTO>> getGroupMessages(@PathVariable UUID teamId) {
-        return ResponseEntity.ok(chatService.getGroupMessages(teamId));
+    public ResponseEntity<?> getGroupMessages(@PathVariable UUID teamId,
+                                              @AuthenticationPrincipal User currentUser) {
+        try {
+            accessControlService.validateTeamAccess(currentUser.getId(), teamId);
+            return ResponseEntity.ok(chatService.getGroupMessages(teamId));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
-    /** Get DM with a specific user */
     @GetMapping("/teams/{teamId}/chat/dm/{userId}")
-    public ResponseEntity<List<ChatMessageDTO>> getDirectMessages(
+    public ResponseEntity<?> getDirectMessages(
             @PathVariable UUID teamId,
             @PathVariable UUID userId,
             @AuthenticationPrincipal User currentUser) {
-        return ResponseEntity.ok(chatService.getDirectMessages(teamId, currentUser.getId(), userId));
+        try {
+            accessControlService.validateTeamAccess(currentUser.getId(), teamId);
+            return ResponseEntity.ok(chatService.getDirectMessages(teamId, currentUser.getId(), userId));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
-    /** Get last DM message for each contact */
     @GetMapping("/teams/{teamId}/chat/dm-previews")
-    public ResponseEntity<List<ChatMessageDTO>> getDmPreviews(
+    public ResponseEntity<?> getDmPreviews(
             @PathVariable UUID teamId,
             @AuthenticationPrincipal User currentUser) {
-        return ResponseEntity.ok(chatService.getLastDmMessages(teamId, currentUser.getId()));
+        try {
+            accessControlService.validateTeamAccess(currentUser.getId(), teamId);
+            return ResponseEntity.ok(chatService.getLastDmMessages(teamId, currentUser.getId()));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
-    /** Send a message (group or DM) — also broadcasts via WebSocket */
     @PostMapping("/teams/{teamId}/chat")
-    public ResponseEntity<ChatMessageDTO> sendMessage(
+    public ResponseEntity<?> sendMessage(
             @PathVariable UUID teamId,
             @RequestBody Map<String, String> body,
             @AuthenticationPrincipal User currentUser) {
+        accessControlService.validateTeamAccess(currentUser.getId(), teamId);
         String content = body.get("content");
         String recipientIdStr = body.get("recipientId");
+        String attachmentUrl = body.get("attachmentUrl");
+        String attachmentName = body.get("attachmentName");
+        String attachmentType = body.get("attachmentType");
 
-        if (content == null || content.isBlank()) {
-            return ResponseEntity.badRequest().build();
+        if ((content == null || content.isBlank()) && (attachmentUrl == null || attachmentUrl.isBlank())) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Tin nhắn không được để trống"));
         }
 
         UUID recipientId = null;
@@ -70,20 +90,16 @@ public class ChatController {
             recipientId = UUID.fromString(recipientIdStr);
         }
 
-        ChatMessageDTO saved = chatService.sendMessage(teamId, currentUser, recipientId, content);
+        ChatMessageDTO saved = chatService.sendMessage(teamId, currentUser, recipientId, content, attachmentUrl, attachmentName, attachmentType);
 
-        // Broadcast via WebSocket
         if (recipientId == null) {
-            // Group message → broadcast to /topic/team/{teamId}
             messagingTemplate.convertAndSend("/topic/team/" + teamId, saved);
         } else {
-            // DM → broadcast to both sender and recipient private channels
             messagingTemplate.convertAndSend("/topic/dm/" + teamId + "/" + currentUser.getId() + "/" + recipientId, saved);
             messagingTemplate.convertAndSend("/topic/dm/" + teamId + "/" + recipientId + "/" + currentUser.getId(), saved);
 
-            // Send DM notification to recipient
             String senderName = currentUser.getFullName() != null ? currentUser.getFullName() : currentUser.getUsername();
-            String preview = content.length() > 50 ? content.substring(0, 50) + "..." : content;
+            String preview = (content != null && content.length() > 50) ? content.substring(0, 50) + "..." : (content != null && !content.isBlank() ? content : "Đã gửi một đính kèm");
             notificationService.createAndSend(
                     recipientId,
                     "Tin nhắn mới từ " + senderName,
@@ -96,7 +112,6 @@ public class ChatController {
         return ResponseEntity.ok(saved);
     }
 
-    /** Get online users */
     @GetMapping("/presence/online")
     public ResponseEntity<Set<String>> getOnlineUsers() {
         return ResponseEntity.ok(presenceService.getOnlineUserIds());

@@ -65,6 +65,19 @@ public class NotificationService {
         });
     }
 
+    /**
+     * Verifies that a notification belongs to a given user. Prevents IDOR on
+     * mark-as-read by ensuring the caller owns the target notification.
+     */
+    public boolean canUserModifyNotification(UUID notificationId, UUID userId) {
+        if (notificationId == null || userId == null) {
+            return false;
+        }
+        return notifRepo.findById(notificationId)
+                .map(n -> n.getUser() != null && userId.equals(n.getUser().getId()))
+                .orElse(false);
+    }
+
     public void markAllRead(UUID userId) {
         List<Notification> unread = notifRepo.findByUserIdOrderByCreatedAtDesc(userId)
                 .stream().filter(n -> !n.getIsRead()).collect(Collectors.toList());

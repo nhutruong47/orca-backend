@@ -4,6 +4,7 @@ import org.example.backend.dto.AuthResponse;
 import org.example.backend.dto.ChangePasswordRequest;
 import org.example.backend.dto.LoginRequest;
 import org.example.backend.dto.RegisterRequest;
+import org.example.backend.dto.ForgotPasswordRequest;
 import org.example.backend.dto.ResetPasswordRequest;
 import org.example.backend.dto.UpdateProfileRequest;
 import org.example.backend.entity.Role;
@@ -18,9 +19,16 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.UUID;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 public class AuthService {
+
+    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
+    private final Map<String, User> resetTokens = new ConcurrentHashMap<>();
 
     @Autowired
     private UserRepository userRepository;
@@ -81,11 +89,20 @@ public class AuthService {
         userRepository.save(user);
     }
 
-    public void resetPassword(User user, ResetPasswordRequest request) {
+    public void forgotPassword(ForgotPasswordRequest request) {
+        User user = userRepository.findByEmail(request.getEmail()).orElse(null);
+        if (user != null) {
+            String token = UUID.randomUUID().toString();
+            resetTokens.put(token, user);
+            log.info("Reset password token for {}: {}", request.getEmail(), token);
+        }
+    }
+
+    public void resetPassword(ResetPasswordRequest request) {
         validateNewPassword(request.getNewPassword());
-        if (request.getUsername() == null
-                || !user.getUsername().equalsIgnoreCase(request.getUsername().trim())) {
-            throw new RuntimeException("Tên đăng nhập xác nhận không đúng.");
+        User user = resetTokens.remove(request.getToken());
+        if (user == null) {
+            throw new RuntimeException("Token không hợp lệ hoặc đã hết hạn.");
         }
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);

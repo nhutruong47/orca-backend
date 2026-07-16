@@ -6,7 +6,14 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "production_orders")
+@Table(
+    name = "production_orders",
+    indexes = {
+        @Index(name = "idx_production_orders_status", columnList = "status, created_at"),
+        @Index(name = "idx_production_orders_team", columnList = "team_id"),
+        @Index(name = "idx_production_orders_deadline", columnList = "internal_deadline")
+    }
+)
 public class ProductionOrder {
 
     @Id
@@ -14,7 +21,7 @@ public class ProductionOrder {
     @Column(updatable = false, nullable = false)
     private UUID id;
 
-    @ManyToOne(fetch = FetchType.EAGER)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "team_id", nullable = false)
     private Team team;
 

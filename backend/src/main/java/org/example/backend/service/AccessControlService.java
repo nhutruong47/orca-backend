@@ -163,6 +163,38 @@ public class AccessControlService {
         requireTeamMember(user, task.getGoal().getTeam().getId());
     }
 
+    public void requireTaskModifierAccess(User user, UUID taskId) {
+        UUID userId = requireUserId(user);
+        if (isSystemAdmin(userId)) {
+            return;
+        }
+        
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new RuntimeException("Task not found"));
+        if (task.getGoal() == null || task.getGoal().getTeam() == null) {
+            throw forbidden();
+        }
+
+        UUID teamId = task.getGoal().getTeam().getId();
+        
+        // 1. Is Team Admin?
+        TeamMember membership = teamMemberRepository.findByTeamIdAndUserId(teamId, userId).orElse(null);
+        if (membership == null) {
+            throw forbidden(); // Not even in the team
+        }
+        if (membership.getGroupRole() == GroupRole.ADMIN) {
+            return; // Admins can modify any task
+        }
+
+        // 2. Is Assignee (member) or Supervisor?
+        boolean isAssignee = task.getMember() != null && task.getMember().getId().equals(userId);
+        boolean isSupervisor = task.getSupervisor() != null && task.getSupervisor().getId().equals(userId);
+        
+        if (!isAssignee && !isSupervisor) {
+            throw forbidden(); // Normal members who are not assignee or supervisor cannot modify this task
+        }
+    }
+
     public void requireChecklistAccess(User user, UUID checklistId) {
         Task task = taskChecklistRepository.findById(checklistId)
                 .map(checklist -> checklist.getTask())

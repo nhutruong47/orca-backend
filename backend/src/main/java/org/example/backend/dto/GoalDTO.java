@@ -1,9 +1,13 @@
 package org.example.backend.dto;
 
 import java.time.LocalDateTime;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 
 public class GoalDTO {
     private String id;
+    
+    @NotBlank(message = "Title is required")
     private String title;
     private String outputTarget;
     private String rawInstruction;
@@ -13,6 +17,8 @@ public class GoalDTO {
     private String deadline;
     private Integer totalTasks;
     private Integer completedTasks;
+    
+    @NotBlank(message = "Team ID is required")
     private String teamId;
     private String teamName;
     private String ownerId;

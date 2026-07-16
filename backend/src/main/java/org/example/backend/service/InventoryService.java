@@ -5,6 +5,7 @@ import org.example.backend.entity.InventoryItem;
 import org.example.backend.entity.Team;
 import org.example.backend.repository.InventoryRepository;
 import org.example.backend.repository.TeamRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,10 +17,14 @@ public class InventoryService {
 
     private final InventoryRepository inventoryRepo;
     private final TeamRepository teamRepo;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public InventoryService(InventoryRepository inventoryRepo, TeamRepository teamRepo) {
+    public InventoryService(InventoryRepository inventoryRepo,
+                            TeamRepository teamRepo,
+                            ApplicationEventPublisher eventPublisher) {
         this.inventoryRepo = inventoryRepo;
         this.teamRepo = teamRepo;
+        this.eventPublisher = eventPublisher;
     }
 
     // ========== READ ==========
@@ -69,7 +74,10 @@ public class InventoryService {
         item.setUnit(dto.getUnit() != null ? dto.getUnit() : "kg");
         item.setLowStockThreshold(dto.getLowStockThreshold() != null ? dto.getLowStockThreshold() : 100.0);
 
-        return toDTO(inventoryRepo.save(item));
+        InventoryItem saved = inventoryRepo.save(item);
+        eventPublisher.publishEvent(
+                new AsyncIndexerService.InventoryChanged(t.getId(), saved.getId()));
+        return toDTO(saved);
     }
 
     // ========== UPDATE ==========
@@ -78,13 +86,23 @@ public class InventoryService {
         InventoryItem item = inventoryRepo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Item not found"));
         item.setQuantity(newQuantity);
-        return toDTO(inventoryRepo.save(item));
+        InventoryItem saved = inventoryRepo.save(item);
+        if (saved.getTeam() != null) {
+            eventPublisher.publishEvent(
+                    new AsyncIndexerService.InventoryChanged(saved.getTeam().getId(), saved.getId()));
+        }
+        return toDTO(saved);
     }
 
     // ========== DELETE ==========
 
     public void delete(UUID id) {
+        InventoryItem item = inventoryRepo.findById(id).orElse(null);
         inventoryRepo.deleteById(id);
+        if (item != null && item.getTeam() != null) {
+            eventPublisher.publishEvent(
+                    new AsyncIndexerService.InventoryChanged(item.getTeam().getId(), id));
+        }
     }
 
     // ========== AUTO INVENTORY UPDATE (Production Workflow) ==========

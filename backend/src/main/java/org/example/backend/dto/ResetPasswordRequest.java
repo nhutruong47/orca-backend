@@ -1,15 +1,22 @@
 package org.example.backend.dto;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
 public class ResetPasswordRequest {
-    private String username;
+    @NotBlank
+    private String token;
+
+    @NotBlank
+    @Size(min = 6)
     private String newPassword;
 
-    public String getUsername() {
-        return username;
+    public String getToken() {
+        return token;
     }
 
-    public void setUsername(String username) {
-        this.username = username;
+    public void setToken(String token) {
+        this.token = token;
     }
 
     public String getNewPassword() {

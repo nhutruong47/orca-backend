@@ -9,6 +9,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import org.example.backend.dto.ConfirmDeliveryRequest;
+import org.example.backend.dto.MarkViewedRequest;
+
+import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -43,72 +47,44 @@ public class InterGroupOrderController {
     }
 
     @PostMapping
-    public ResponseEntity<?> placeOrder(@RequestBody InterGroupOrderDTO dto, @AuthenticationPrincipal User user) {
-        try {
-            return ResponseEntity.ok(orderService.createOrder(dto, user));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+    public ResponseEntity<?> placeOrder(@Valid @RequestBody InterGroupOrderDTO dto, @AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(orderService.createOrder(dto, user));
     }
 
     @GetMapping("/{orderId}")
     public ResponseEntity<?> getOrder(@PathVariable UUID orderId, @AuthenticationPrincipal User user) {
-        try {
-            accessControlService.requireInterGroupOrderAccess(user, orderId);
-            return ResponseEntity.ok(orderService.getById(orderId));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        accessControlService.requireInterGroupOrderAccess(user, orderId);
+        return ResponseEntity.ok(orderService.getById(orderId));
     }
 
     @PostMapping("/{orderId}/accept")
     public ResponseEntity<?> acceptOrder(@PathVariable UUID orderId, @AuthenticationPrincipal User user) {
-        try {
-            accessControlService.requireInterGroupOrderAccess(user, orderId);
-            return ResponseEntity.ok(orderService.acceptOrder(orderId, user));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        accessControlService.requireInterGroupOrderAccess(user, orderId);
+        return ResponseEntity.ok(orderService.acceptOrder(orderId, user));
     }
 
     @PostMapping("/{orderId}/reject")
     public ResponseEntity<?> rejectOrder(@PathVariable UUID orderId, @AuthenticationPrincipal User user) {
-        try {
-            accessControlService.requireInterGroupOrderAccess(user, orderId);
-            return ResponseEntity.ok(orderService.rejectOrder(orderId, user));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        accessControlService.requireInterGroupOrderAccess(user, orderId);
+        return ResponseEntity.ok(orderService.rejectOrder(orderId, user));
     }
 
     @PostMapping("/{orderId}/cancel")
     public ResponseEntity<?> cancelOrder(@PathVariable UUID orderId, @AuthenticationPrincipal User user) {
-        try {
-            accessControlService.requireInterGroupOrderAccess(user, orderId);
-            return ResponseEntity.ok(orderService.cancelOrder(orderId, user));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        accessControlService.requireInterGroupOrderAccess(user, orderId);
+        return ResponseEntity.ok(orderService.cancelOrder(orderId, user));
     }
 
     @PostMapping("/{orderId}/approve-cancel")
     public ResponseEntity<?> approveCancelOrder(@PathVariable UUID orderId, @AuthenticationPrincipal User user) {
-        try {
-            accessControlService.requireInterGroupOrderAccess(user, orderId);
-            return ResponseEntity.ok(orderService.approveCancelOrder(orderId, user));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        accessControlService.requireInterGroupOrderAccess(user, orderId);
+        return ResponseEntity.ok(orderService.approveCancelOrder(orderId, user));
     }
 
     @PostMapping("/{orderId}/reject-cancel")
     public ResponseEntity<?> rejectCancelOrder(@PathVariable UUID orderId, @AuthenticationPrincipal User user) {
-        try {
-            accessControlService.requireInterGroupOrderAccess(user, orderId);
-            return ResponseEntity.ok(orderService.rejectCancelOrder(orderId, user));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        accessControlService.requireInterGroupOrderAccess(user, orderId);
+        return ResponseEntity.ok(orderService.rejectCancelOrder(orderId, user));
     }
 
     /**
@@ -116,12 +92,8 @@ public class InterGroupOrderController {
      */
     @PatchMapping("/{orderId}/ship")
     public ResponseEntity<?> shipOrder(@PathVariable UUID orderId, @AuthenticationPrincipal User user) {
-        try {
-            accessControlService.requireInterGroupOrderAccess(user, orderId);
-            return ResponseEntity.ok(orderService.shipOrder(orderId, user));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        accessControlService.requireInterGroupOrderAccess(user, orderId);
+        return ResponseEntity.ok(orderService.shipOrder(orderId, user));
     }
 
     /**
@@ -130,16 +102,11 @@ public class InterGroupOrderController {
      */
     @PatchMapping("/{orderId}/deliver")
     public ResponseEntity<?> deliverOrder(@PathVariable UUID orderId,
-                                          @RequestBody(required = false) Map<String, Object> payload,
+                                          @RequestBody(required = false) ConfirmDeliveryRequest payload,
                                           @AuthenticationPrincipal User user) {
-        try {
-            accessControlService.requireInterGroupOrderAccess(user, orderId);
-            String deliveryNote = payload != null && payload.get("deliveryNote") != null
-                    ? payload.get("deliveryNote").toString() : null;
-            return ResponseEntity.ok(orderService.deliverOrder(orderId, deliveryNote, user));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        accessControlService.requireInterGroupOrderAccess(user, orderId);
+        String deliveryNote = payload != null ? payload.getDeliveryNote() : null;
+        return ResponseEntity.ok(orderService.deliverOrder(orderId, deliveryNote, user));
     }
 
     /**
@@ -148,52 +115,36 @@ public class InterGroupOrderController {
      */
     @PatchMapping("/{orderId}/confirm-delivery")
     public ResponseEntity<?> confirmDelivery(@PathVariable UUID orderId,
-                                             @RequestBody(required = false) Map<String, Object> payload,
+                                             @RequestBody(required = false) ConfirmDeliveryRequest payload,
                                              @AuthenticationPrincipal User user) {
-        try {
-            accessControlService.requireInterGroupOrderAccess(user, orderId);
-            String deliveryStatus = payload != null && payload.get("deliveryStatus") != null
-                    ? payload.get("deliveryStatus").toString() : "ON_TIME";
-            Integer rating = payload != null && payload.get("rating") instanceof Number
-                    ? ((Number) payload.get("rating")).intValue() : 5;
-            String comment = payload != null && payload.get("comment") != null
-                    ? payload.get("comment").toString() : null;
-            return ResponseEntity.ok(orderService.confirmDelivery(orderId, deliveryStatus, rating, comment, user));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        accessControlService.requireInterGroupOrderAccess(user, orderId);
+        String deliveryStatus = (payload != null && payload.getDeliveryStatus() != null) ? payload.getDeliveryStatus() : "ON_TIME";
+        Integer rating = (payload != null && payload.getRating() != null) ? payload.getRating() : 5;
+        String comment = payload != null ? payload.getComment() : null;
+        return ResponseEntity.ok(orderService.confirmDelivery(orderId, deliveryStatus, rating, comment, user));
     }
 
     @PostMapping("/{orderId}/buyer-confirm")
     public ResponseEntity<?> buyerConfirmDelivery(@PathVariable UUID orderId,
             @AuthenticationPrincipal User user,
-            @RequestBody Map<String, Object> payload) {
-        try {
-            accessControlService.requireInterGroupOrderAccess(user, orderId);
-            String deliveryStatus = (String) payload.get("deliveryStatus");
-            int rating = ((Number) payload.get("rating")).intValue();
-            String comment = (String) payload.get("comment");
-            return ResponseEntity.ok(orderService.buyerConfirmDelivery(orderId, deliveryStatus, rating, comment, user));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+            @RequestBody ConfirmDeliveryRequest payload) {
+        accessControlService.requireInterGroupOrderAccess(user, orderId);
+        String deliveryStatus = payload.getDeliveryStatus();
+        int rating = payload.getRating() != null ? payload.getRating() : 5;
+        String comment = payload.getComment();
+        return ResponseEntity.ok(orderService.buyerConfirmDelivery(orderId, deliveryStatus, rating, comment, user));
     }
 
     @PostMapping("/mark-viewed")
-    public ResponseEntity<?> markViewed(@RequestBody Map<String, Object> payload,
+    public ResponseEntity<?> markViewed(@RequestBody MarkViewedRequest payload,
                                         @AuthenticationPrincipal User user) {
-        try {
-            List<String> orderIdsStr = (List<String>) payload.get("orderIds");
-            List<UUID> orderIds = orderIdsStr.stream().map(UUID::fromString).collect(java.util.stream.Collectors.toList());
-            String role = (String) payload.get("role");
-            // Ensure current user has access to every order being marked
-            for (UUID orderId : orderIds) {
-                accessControlService.requireInterGroupOrderAccess(user, orderId);
-            }
-            orderService.markOrdersAsViewed(orderIds, role);
-            return ResponseEntity.ok(Map.of("message", "Success"));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        List<UUID> orderIds = payload.getOrderIds();
+        String role = payload.getRole();
+        // Ensure current user has access to every order being marked
+        for (UUID orderId : orderIds) {
+            accessControlService.requireInterGroupOrderAccess(user, orderId);
         }
+        orderService.markOrdersAsViewed(orderIds, role);
+        return ResponseEntity.ok(Map.of("message", "Success"));
     }
 }

@@ -3,7 +3,6 @@ package org.example.backend.controller;
 import org.example.backend.dto.NotificationDTO;
 import org.example.backend.entity.User;
 import org.example.backend.service.NotificationService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -16,8 +15,11 @@ import java.util.UUID;
 @RequestMapping("/api/notifications")
 public class NotificationController {
 
-    @Autowired
-    private NotificationService notificationService;
+    private final NotificationService notificationService;
+
+    public NotificationController(NotificationService notificationService) {
+        this.notificationService = notificationService;
+    }
 
     @GetMapping
     public ResponseEntity<List<NotificationDTO>> getMyNotifications(@AuthenticationPrincipal User user) {
@@ -30,7 +32,10 @@ public class NotificationController {
     }
 
     @PatchMapping("/{id}/read")
-    public ResponseEntity<?> markAsRead(@PathVariable UUID id) {
+    public ResponseEntity<?> markAsRead(@PathVariable UUID id, @AuthenticationPrincipal User user) {
+        if (!notificationService.canUserModifyNotification(id, user.getId())) {
+            return ResponseEntity.status(403).body(Map.of("error", "Bạn không có quyền thay đổi thông báo này"));
+        }
         notificationService.markAsRead(id);
         return ResponseEntity.ok(Map.of("message", "Đã đọc"));
     }

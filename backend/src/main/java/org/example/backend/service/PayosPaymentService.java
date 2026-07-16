@@ -85,6 +85,44 @@ public class PayosPaymentService {
     }
 
     @Transactional
+    public Map<String, Object> createSalaryPaymentLink(User user, String teamId, long amount) {
+        long orderCode = System.currentTimeMillis() / 1000 + (long)(Math.random() * 10000);
+        String txnRef = String.valueOf(orderCode);
+
+        PaymentTransaction transaction = new PaymentTransaction();
+        transaction.setTxnRef(txnRef);
+        transaction.setUser(user);
+        transaction.setPlanId("SALARY_" + teamId);
+        transaction.setAmount(amount);
+        transaction.setStatus("PENDING");
+        transaction.setBankCode("PAYOS");
+        transaction.setPaymentMethod("PAYOS");
+        paymentRepository.save(transaction);
+
+        String returnUrl = frontendUrl + "/payment-result?txnRef=" + txnRef + "&planId=SALARY";
+        String cancelUrl = frontendUrl + "/group/" + teamId;
+
+        CreatePaymentLinkRequest paymentData = CreatePaymentLinkRequest.builder()
+                .orderCode(orderCode)
+                .amount(amount)
+                .description("Thanh toan luong")
+                .returnUrl(returnUrl)
+                .cancelUrl(cancelUrl)
+                .build();
+
+        try {
+            CreatePaymentLinkResponse data = payOS.paymentRequests().create(paymentData);
+
+            Map<String, Object> response = new LinkedHashMap<>();
+            response.put("checkoutUrl", data.getCheckoutUrl());
+            response.put("txnRef", txnRef);
+            return response;
+        } catch (Exception e) {
+            throw new RuntimeException("Loi tao PayOS link: " + e.getMessage(), e);
+        }
+    }
+
+    @Transactional
     public Map<String, Object> handleWebhook(Map<String, Object> requestBody) {
         try {
             Webhook webhookBody = objectMapper.convertValue(requestBody, Webhook.class);
@@ -100,7 +138,11 @@ public class PayosPaymentService {
                     transaction.setVnpTransactionStatus("00");
                     paymentRepository.save(transaction);
 
-                    activatePlan(transaction.getUser(), transaction.getPlanId());
+                    if (transaction.getPlanId().startsWith("SALARY_")) {
+                        // handled by webhook or UI refresh
+                    } else {
+                        activatePlan(transaction.getUser(), transaction.getPlanId());
+                    }
                 }
             }
             return Map.of("success", true);

@@ -1,10 +1,14 @@
 package org.example.backend.exception;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -19,6 +23,8 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<Map<String, Object>> handleResponseStatusException(ResponseStatusException ex) {
         HttpStatus status = HttpStatus.resolve(ex.getStatusCode().value());
@@ -29,10 +35,22 @@ public class GlobalExceptionHandler {
         return buildResponse(status, status.name(), message);
     }
 
-    // === Lỗi logic nghiệp vụ (RuntimeException) ===
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<Map<String, Object>> handleAccessDenied(AccessDeniedException ex) {
         return buildResponse(HttpStatus.FORBIDDEN, "Forbidden", ex.getMessage());
+    }
+
+    @ExceptionHandler({AuthenticationException.class, AuthenticationCredentialsNotFoundException.class})
+    public ResponseEntity<Map<String, Object>> handleAuthenticationException(AuthenticationException ex) {
+        return buildResponse(HttpStatus.UNAUTHORIZED, "Unauthorized",
+                ex.getMessage() != null ? ex.getMessage() : "Authentication required");
+    }
+
+    @ExceptionHandler(NullPointerException.class)
+    public ResponseEntity<Map<String, Object>> handleNullPointer(NullPointerException ex) {
+        log.error("NullPointerException caught by handler", ex);
+        return buildResponse(HttpStatus.BAD_REQUEST, "Bad Request",
+                "Thiếu dữ liệu bắt buộc hoặc tham chiếu không hợp lệ.");
     }
 
     @ExceptionHandler(RuntimeException.class)
@@ -40,7 +58,6 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.BAD_REQUEST, "Lỗi nghiệp vụ", ex.getMessage());
     }
 
-    // === Lỗi trùng dữ liệu (UNIQUE constraint) ===
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<Map<String, Object>> handleDataIntegrity(DataIntegrityViolationException ex) {
         String detail = ex.getMostSpecificCause().getMessage();
@@ -59,14 +76,12 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.CONFLICT, "Lỗi dữ liệu", friendlyMsg);
     }
 
-    // === Lỗi thiếu/sai tham số ===
     @ExceptionHandler(MissingServletRequestParameterException.class)
     public ResponseEntity<Map<String, Object>> handleMissingParam(MissingServletRequestParameterException ex) {
         String msg = "Thiếu tham số bắt buộc: " + ex.getParameterName() + " (kiểu: " + ex.getParameterType() + ")";
         return buildResponse(HttpStatus.BAD_REQUEST, "Thiếu tham số", msg);
     }
 
-    // === Lỗi kiểu dữ liệu sai (VD: truyền string cho UUID) ===
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<Map<String, Object>> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
         String msg = "Tham số '" + ex.getName() + "' có giá trị không hợp lệ: '" + ex.getValue()
@@ -75,14 +90,12 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.BAD_REQUEST, "Sai kiểu dữ liệu", msg);
     }
 
-    // === Lỗi body JSON không đọc được ===
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<Map<String, Object>> handleBadJson(HttpMessageNotReadableException ex) {
         return buildResponse(HttpStatus.BAD_REQUEST, "Lỗi định dạng",
                 "Dữ liệu gửi lên không đúng định dạng JSON. Kiểm tra lại body request.");
     }
 
-    // === Lỗi validation (@Valid) ===
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, Object>> handleValidation(MethodArgumentNotValidException ex) {
         Map<String, Object> body = new LinkedHashMap<>();
@@ -98,11 +111,11 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(body);
     }
 
-    // === Lỗi chung ===
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGeneral(Exception ex) {
+        log.error("Unhandled exception", ex);
         return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Lỗi hệ thống",
-                ex.getClass().getSimpleName() + ": " + ex.getMessage());
+                "Đã xảy ra lỗi không mong muốn. Vui lòng thử lại sau.");
     }
 
     private ResponseEntity<Map<String, Object>> buildResponse(HttpStatus status, String error, String message) {

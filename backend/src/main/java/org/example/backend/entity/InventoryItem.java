@@ -5,8 +5,14 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "inventory_items",
-       uniqueConstraints = @UniqueConstraint(columnNames = {"team_id", "product_type", "product_state"}))
+@Table(
+    name = "inventory_items",
+    indexes = {
+        @Index(name = "idx_inventory_team_type", columnList = "team_id, product_type"),
+        @Index(name = "idx_inventory_low_stock", columnList = "quantity, low_stock_threshold")
+    },
+    uniqueConstraints = @UniqueConstraint(columnNames = {"team_id", "product_type", "product_state"})
+)
 public class InventoryItem {
 
     @Id
@@ -14,7 +20,11 @@ public class InventoryItem {
     @Column(updatable = false, nullable = false)
     private UUID id;
 
-    @ManyToOne(fetch = FetchType.EAGER)
+    @Version
+    @Column(name = "version")
+    private Long version;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "team_id", nullable = false)
     private Team team;
 
@@ -90,6 +100,9 @@ public class InventoryItem {
 
     public UUID getId() { return id; }
     public void setId(UUID id) { this.id = id; }
+
+    public Long getVersion() { return version; }
+    public void setVersion(Long version) { this.version = version; }
 
     public Team getTeam() { return team; }
     public void setTeam(Team team) { this.team = team; }

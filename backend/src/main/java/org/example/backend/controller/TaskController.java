@@ -4,49 +4,50 @@ import org.example.backend.dto.TaskDTO;
 import org.example.backend.entity.User;
 import org.example.backend.service.AccessControlService;
 import org.example.backend.service.TaskService;
+import org.example.backend.service.PayosPaymentService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.ResponseEntity;
-
-import java.io.ByteArrayOutputStream;
-
 @RestController
 @RequestMapping("/api/tasks")
 public class TaskController {
 
-    @Autowired
-    private TaskService taskService;
+    private final TaskService taskService;
+    private final AccessControlService accessControlService;
+    private final PayosPaymentService payosPaymentService;
 
-    @Autowired
-    private AccessControlService accessControlService;
+    public TaskController(TaskService taskService, AccessControlService accessControlService, PayosPaymentService payosPaymentService) {
+        this.taskService = taskService;
+        this.accessControlService = accessControlService;
+        this.payosPaymentService = payosPaymentService;
+    }
 
+    /**
+     * Returns tasks visible to the current user.
+     * - ADMIN: all tasks in the system.
+     * - Regular user: tasks belonging to the teams they are a member of.
+     */
     @GetMapping
     public ResponseEntity<List<TaskDTO>> getAll(@AuthenticationPrincipal User user) {
-        return ResponseEntity.ok(taskService.getAll());
+        if (user == null || user.getId() == null) {
+            return ResponseEntity.status(401).build();
+        }
+        return ResponseEntity.ok(taskService.getAllVisibleTo(user));
     }
 
     @GetMapping("/by-goal/{goalId}")
     public ResponseEntity<?> getByGoal(@PathVariable UUID goalId, @AuthenticationPrincipal User user) {
-        try {
-            accessControlService.requireGoalAccess(user, goalId);
-            return ResponseEntity.ok(taskService.getByGoal(goalId));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        accessControlService.requireGoalAccess(user, goalId);
+        return ResponseEntity.ok(taskService.getByGoal(goalId));
     }
 
     @GetMapping("/my-tasks")
@@ -71,174 +72,108 @@ public class TaskController {
 
     @GetMapping("/{id}")
     public ResponseEntity<?> getTaskDetail(@PathVariable UUID id, @AuthenticationPrincipal User user) {
-        try {
-            accessControlService.requireTaskAccess(user, id);
-            return ResponseEntity.ok(taskService.getById(id));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        accessControlService.requireTaskAccess(user, id);
+        return ResponseEntity.ok(taskService.getById(id));
     }
 
     @PostMapping
-    public ResponseEntity<?> create(@RequestBody TaskDTO dto, @AuthenticationPrincipal User user) {
-        try {
-            if (dto != null && dto.getGoalId() != null) {
-                accessControlService.requireGoalAccess(user, UUID.fromString(dto.getGoalId()));
-            }
-            return ResponseEntity.ok(taskService.create(dto));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+    public ResponseEntity<?> create(@Valid @RequestBody TaskDTO dto, @AuthenticationPrincipal User user) {
+        if (dto != null && dto.getGoalId() != null) {
+            accessControlService.requireGoalAccess(user, UUID.fromString(dto.getGoalId()));
         }
+        return ResponseEntity.ok(taskService.create(dto));
     }
 
     @PatchMapping("/{id}")
     public ResponseEntity<?> updateTask(@PathVariable UUID id, @RequestBody Map<String, Object> body, @AuthenticationPrincipal User user) {
-        try {
-            accessControlService.requireTaskAccess(user, id);
-            return ResponseEntity.ok(taskService.update(id, body));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        accessControlService.requireTaskModifierAccess(user, id);
+        return ResponseEntity.ok(taskService.update(id, body));
     }
 
     @PatchMapping("/{id}/status")
     public ResponseEntity<?> updateStatus(@PathVariable UUID id, @RequestBody Map<String, String> body, @AuthenticationPrincipal User user) {
-        try {
-            accessControlService.requireTaskAccess(user, id);
-            return ResponseEntity.ok(taskService.updateStatus(id, body.get("status")));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        accessControlService.requireTaskModifierAccess(user, id);
+        return ResponseEntity.ok(taskService.updateStatus(id, body.get("status")));
     }
 
     @PatchMapping("/{id}/progress")
     public ResponseEntity<?> updateProgress(@PathVariable UUID id, @RequestBody Map<String, Integer> body, @AuthenticationPrincipal User user) {
-        try {
-            accessControlService.requireTaskAccess(user, id);
-            return ResponseEntity.ok(taskService.updateProgress(id, body.get("percentage")));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        accessControlService.requireTaskModifierAccess(user, id);
+        return ResponseEntity.ok(taskService.updateProgress(id, body.get("percentage")));
     }
 
     @PatchMapping("/{id}/workload")
     public ResponseEntity<?> updateWorkload(@PathVariable UUID id, @RequestBody Map<String, Double> body, @AuthenticationPrincipal User user) {
-        try {
-            accessControlService.requireTaskAccess(user, id);
-            return ResponseEntity.ok(taskService.updateWorkload(id, body.get("actualWorkload")));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        accessControlService.requireTaskModifierAccess(user, id);
+        return ResponseEntity.ok(taskService.updateWorkload(id, body.get("actualWorkload")));
     }
 
     @PatchMapping("/{id}/assign")
     public ResponseEntity<?> assign(@PathVariable UUID id, @RequestBody Map<String, String> body, @AuthenticationPrincipal User user) {
-        try {
-            accessControlService.requireTaskAccess(user, id);
-            return ResponseEntity.ok(taskService.assign(id, UUID.fromString(body.get("memberId"))));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        accessControlService.requireTaskModifierAccess(user, id);
+        return ResponseEntity.ok(taskService.assign(id, UUID.fromString(body.get("memberId"))));
     }
 
     @PatchMapping("/{id}/backup")
     public ResponseEntity<?> setBackup(@PathVariable UUID id, @RequestBody Map<String, String> body, @AuthenticationPrincipal User user) {
-        try {
-            accessControlService.requireTaskAccess(user, id);
-            return ResponseEntity.ok(taskService.setBackup(id, UUID.fromString(body.get("memberId"))));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        accessControlService.requireTaskModifierAccess(user, id);
+        return ResponseEntity.ok(taskService.setBackup(id, UUID.fromString(body.get("memberId"))));
     }
 
     @PatchMapping("/{id}/supervisor")
     public ResponseEntity<?> setSupervisor(@PathVariable UUID id, @RequestBody Map<String, String> body, @AuthenticationPrincipal User user) {
-        try {
-            accessControlService.requireTaskAccess(user, id);
-            return ResponseEntity.ok(taskService.setSupervisor(id, UUID.fromString(body.get("memberId"))));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        accessControlService.requireTaskModifierAccess(user, id);
+        return ResponseEntity.ok(taskService.setSupervisor(id, UUID.fromString(body.get("memberId"))));
     }
 
     @PatchMapping("/{id}/transfer")
     public ResponseEntity<?> transfer(@PathVariable UUID id, @RequestBody Map<String, Object> body, @AuthenticationPrincipal User user) {
-        try {
-            accessControlService.requireTaskAccess(user, id);
-            String toMemberId = body.get("toMemberId") != null ? body.get("toMemberId").toString() : null;
-            String reason = body.get("reason") != null ? body.get("reason").toString() : null;
-            String actorType = body.get("actorType") != null ? body.get("actorType").toString() : null;
-            return ResponseEntity.ok(taskService.transferTask(id, UUID.fromString(toMemberId), reason, actorType, user));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        accessControlService.requireTaskModifierAccess(user, id);
+        String toMemberId = body.get("toMemberId") != null ? body.get("toMemberId").toString() : null;
+        String reason = body.get("reason") != null ? body.get("reason").toString() : null;
+        String actorType = body.get("actorType") != null ? body.get("actorType").toString() : null;
+        return ResponseEntity.ok(taskService.transferTask(id, UUID.fromString(toMemberId), reason, actorType, user));
     }
 
     @GetMapping("/{id}/transfers")
     public ResponseEntity<?> getTransfers(@PathVariable UUID id, @AuthenticationPrincipal User user) {
-        try {
-            accessControlService.requireTaskAccess(user, id);
-            return ResponseEntity.ok(taskService.getTransfers(id));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        accessControlService.requireTaskAccess(user, id);
+        return ResponseEntity.ok(taskService.getTransfers(id));
     }
 
     @PostMapping("/{id}/dependencies")
     public ResponseEntity<?> addDependency(@PathVariable UUID id, @RequestBody Map<String, Object> body, @AuthenticationPrincipal User user) {
-        try {
-            accessControlService.requireTaskAccess(user, id);
-            String dependsOnTaskId = body.get("dependsOnTaskId") != null ? body.get("dependsOnTaskId").toString() : null;
-            String type = body.get("dependencyType") != null ? body.get("dependencyType").toString() : "FINISH_TO_START";
-            return ResponseEntity.ok(taskService.addDependency(id, UUID.fromString(dependsOnTaskId), type));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        accessControlService.requireTaskModifierAccess(user, id);
+        String dependsOnTaskId = body.get("dependsOnTaskId") != null ? body.get("dependsOnTaskId").toString() : null;
+        String type = body.get("dependencyType") != null ? body.get("dependencyType").toString() : "FINISH_TO_START";
+        return ResponseEntity.ok(taskService.addDependency(id, UUID.fromString(dependsOnTaskId), type));
     }
 
     @GetMapping("/{id}/dependencies")
     public ResponseEntity<?> getDependencies(@PathVariable UUID id, @AuthenticationPrincipal User user) {
-        try {
-            accessControlService.requireTaskAccess(user, id);
-            return ResponseEntity.ok(taskService.getDependencies(id));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        accessControlService.requireTaskAccess(user, id);
+        return ResponseEntity.ok(taskService.getDependencies(id));
     }
 
-    // === Checklist (canonical) ===
     @GetMapping("/{id}/checklists")
     public ResponseEntity<?> getChecklist(@PathVariable UUID id, @AuthenticationPrincipal User user) {
-        try {
-            accessControlService.requireTaskAccess(user, id);
-            return ResponseEntity.ok(taskService.getChecklist(id));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        accessControlService.requireTaskAccess(user, id);
+        return ResponseEntity.ok(taskService.getChecklist(id));
     }
 
 
 
     @PostMapping("/{id}/checklists")
     public ResponseEntity<?> addChecklistItem(@PathVariable UUID id, @RequestBody Map<String, String> body, @AuthenticationPrincipal User user) {
-        try {
-            accessControlService.requireTaskAccess(user, id);
-            return ResponseEntity.ok(taskService.addChecklistItem(id, body.get("content")));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        accessControlService.requireTaskModifierAccess(user, id);
+        return ResponseEntity.ok(taskService.addChecklistItem(id, body.get("content")));
     }
 
-    // Frontend uses /checklist/ (singular) + PATCH .../toggle
     @PatchMapping("/checklists/{checklistId}/toggle")
     public ResponseEntity<?> toggleChecklist(@PathVariable UUID checklistId, @AuthenticationPrincipal User user) {
-        try {
-            accessControlService.requireChecklistAccess(user, checklistId);
-            taskService.toggleChecklistItem(checklistId);
-            return ResponseEntity.ok(Map.of("message", "Toggled"));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        accessControlService.requireChecklistAccess(user, checklistId);
+        taskService.toggleChecklistItem(checklistId);
+        return ResponseEntity.ok(Map.of("message", "Toggled"));
     }
 
 
@@ -247,22 +182,14 @@ public class TaskController {
     public ResponseEntity<?> respondToTask(@PathVariable UUID id,
             @AuthenticationPrincipal User user,
             @RequestBody Map<String, Boolean> body) {
-        try {
-            boolean accepted = Boolean.TRUE.equals(body.get("accepted"));
-            return ResponseEntity.ok(taskService.respondToTask(id, user.getId(), accepted));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        boolean accepted = Boolean.TRUE.equals(body.get("accepted"));
+        return ResponseEntity.ok(taskService.respondToTask(id, user.getId(), accepted));
     }
 
     @GetMapping("/salary/{teamId}")
     public ResponseEntity<?> getSalaryReport(@PathVariable UUID teamId, @AuthenticationPrincipal User user) {
-        try {
-            accessControlService.requireTeamMember(user, teamId);
-            return ResponseEntity.ok(taskService.getSalaryReport(teamId));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        accessControlService.requireTeamMember(user, teamId);
+        return ResponseEntity.ok(taskService.getSalaryReport(teamId));
     }
 
     @GetMapping("/salary/{teamId}/export-excel")
@@ -279,17 +206,19 @@ public class TaskController {
     @PostMapping("/salary/{teamId}/payout")
     public ResponseEntity<?> payoutSalary(@PathVariable UUID teamId,
             @AuthenticationPrincipal User user) {
-        return ResponseEntity.ok(taskService.payoutSalary(teamId, user.getId()));
+        // We get totalSalary from taskService
+        Map<String, Object> mockResult = taskService.payoutSalary(teamId, user.getId());
+        double totalSalary = (double) mockResult.get("totalSalary");
+        
+        // Generate PayOS link
+        Map<String, Object> payosResult = payosPaymentService.createSalaryPaymentLink(user, teamId.toString(), (long) totalSalary);
+        return ResponseEntity.ok(payosResult);
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<?> delete(@PathVariable UUID id, @AuthenticationPrincipal User user) {
-        try {
-            accessControlService.requireTaskAccess(user, id);
-            taskService.delete(id);
-            return ResponseEntity.ok(Map.of("message", "Đã xóa task"));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        accessControlService.requireTaskModifierAccess(user, id);
+        taskService.delete(id);
+        return ResponseEntity.ok(Map.of("message", "Đã xóa task"));
     }
 }

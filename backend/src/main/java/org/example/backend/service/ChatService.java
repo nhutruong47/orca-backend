@@ -44,7 +44,7 @@ public class ChatService {
     }
 
     /** Send a message (group or DM) */
-    public ChatMessageDTO sendMessage(UUID teamId, User sender, UUID recipientId, String content) {
+    public ChatMessageDTO sendMessage(UUID teamId, User sender, UUID recipientId, String content, String attachmentUrl, String attachmentName, String attachmentType) {
         ChatMessage msg = new ChatMessage();
         msg.setTeam(teamRepo.findById(teamId).orElseThrow(() -> new RuntimeException("Team not found")));
         msg.setSender(sender);
@@ -55,6 +55,9 @@ public class ChatService {
         }
 
         msg.setContent(content);
+        msg.setAttachmentUrl(attachmentUrl);
+        msg.setAttachmentName(attachmentName);
+        msg.setAttachmentType(attachmentType);
         return toDTO(chatRepo.save(msg));
     }
 
@@ -69,6 +72,9 @@ public class ChatService {
             dto.setRecipientName(m.getRecipient().getFullName() != null ? m.getRecipient().getFullName() : m.getRecipient().getUsername());
         }
         dto.setContent(m.getContent());
+        dto.setAttachmentUrl(m.getAttachmentUrl());
+        dto.setAttachmentName(m.getAttachmentName());
+        dto.setAttachmentType(m.getAttachmentType());
         dto.setCreatedAt(m.getCreatedAt());
         return dto;
     }

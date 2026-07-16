@@ -15,6 +15,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 
 import java.util.List;
 import java.util.Map;
@@ -34,6 +36,16 @@ public class AdminController {
     @GetMapping("/overview")
     public ResponseEntity<Map<String, Object>> getOverview() {
         return ResponseEntity.ok(adminService.getOverview());
+    }
+
+    @GetMapping("/reports/excel")
+    public ResponseEntity<byte[]> exportAdminReportExcel() throws Exception {
+        byte[] excelBytes = adminService.exportAdminReportExcel();
+        String filename = "admin-report.xlsx";
+        return ResponseEntity.ok()
+            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+            .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+            .body(excelBytes);
     }
 
     @GetMapping("/users")

@@ -10,7 +10,15 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "tasks")
+@Table(
+    name = "tasks",
+    indexes = {
+        @Index(name = "idx_tasks_member_status", columnList = "member_id, status"),
+        @Index(name = "idx_tasks_goal", columnList = "goal_id"),
+        @Index(name = "idx_tasks_due_date", columnList = "due_time"),
+        @Index(name = "idx_tasks_created_at", columnList = "created_at")
+    }
+)
 public class Task {
 
     @Id
@@ -18,17 +26,17 @@ public class Task {
     @Column(updatable = false, nullable = false)
     private UUID id;
 
-    @ManyToOne(fetch = FetchType.EAGER)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "goal_id", nullable = false)
     @OnDelete(action = OnDeleteAction.CASCADE)
     private Goal goal;
 
-    @ManyToOne(fetch = FetchType.EAGER)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "member_id")
     @OnDelete(action = OnDeleteAction.CASCADE)
     private User member;
 
-    @ManyToOne(fetch = FetchType.EAGER)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "backup_member_id")
     @OnDelete(action = OnDeleteAction.CASCADE)
     private User backupMember;
@@ -81,7 +89,7 @@ public class Task {
     @Column(name = "due_time")
     private LocalDateTime dueTime;
 
-    @ManyToOne(fetch = FetchType.EAGER)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "supervisor_id")
     @OnDelete(action = OnDeleteAction.SET_NULL)
     private User supervisor;

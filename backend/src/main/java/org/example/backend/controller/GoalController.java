@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 
 import java.util.List;
 import java.util.Map;
@@ -26,52 +27,32 @@ public class GoalController {
     /** Lấy goals theo team (chỉ member mới được đọc) */
     @GetMapping
     public ResponseEntity<?> getByTeam(@RequestParam UUID teamId, @AuthenticationPrincipal User user) {
-        try {
-            accessControlService.requireTeamMember(user, teamId);
-            return ResponseEntity.ok(goalService.getByTeam(teamId));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        accessControlService.requireTeamMember(user, teamId);
+        return ResponseEntity.ok(goalService.getByTeam(teamId));
     }
 
     /** Tạo goal (chỉ Group Owner) */
     @PostMapping
-    public ResponseEntity<?> create(@RequestBody GoalDTO dto, @AuthenticationPrincipal User user) {
-        try {
-            return ResponseEntity.ok(goalService.create(dto, user));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+    public ResponseEntity<?> create(@Valid @RequestBody GoalDTO dto, @AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(goalService.create(dto, user));
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<?> getDetail(@PathVariable UUID id, @AuthenticationPrincipal User user) {
-        try {
-            accessControlService.requireGoalAccess(user, id);
-            return ResponseEntity.ok(goalService.getDetail(id));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        accessControlService.requireGoalAccess(user, id);
+        return ResponseEntity.ok(goalService.getDetail(id));
     }
 
     @PatchMapping("/{id}/status")
     public ResponseEntity<?> updateStatus(@PathVariable UUID id, @RequestBody Map<String, String> body, @AuthenticationPrincipal User user) {
-        try {
-            accessControlService.requireGoalAccess(user, id);
-            return ResponseEntity.ok(goalService.updateStatus(id, body.get("status")));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        accessControlService.requireGoalAccess(user, id);
+        return ResponseEntity.ok(goalService.updateStatus(id, body.get("status")));
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<?> delete(@PathVariable UUID id, @AuthenticationPrincipal User user) {
-        try {
-            accessControlService.requireGoalAccess(user, id);
-            goalService.delete(id);
-            return ResponseEntity.ok(Map.of("message", "Đã xóa mục tiêu"));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        accessControlService.requireGoalAccess(user, id);
+        goalService.delete(id);
+        return ResponseEntity.ok(Map.of("message", "Đã xóa mục tiêu"));
     }
 }

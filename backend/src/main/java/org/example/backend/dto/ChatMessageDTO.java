@@ -10,6 +10,9 @@ public class ChatMessageDTO {
     private String recipientId;
     private String recipientName;
     private String content;
+    private String attachmentUrl;
+    private String attachmentName;
+    private String attachmentType;
     private LocalDateTime createdAt;
 
     // === Getters & Setters ===
@@ -33,6 +36,15 @@ public class ChatMessageDTO {
 
     public String getContent() { return content; }
     public void setContent(String content) { this.content = content; }
+
+    public String getAttachmentUrl() { return attachmentUrl; }
+    public void setAttachmentUrl(String attachmentUrl) { this.attachmentUrl = attachmentUrl; }
+
+    public String getAttachmentName() { return attachmentName; }
+    public void setAttachmentName(String attachmentName) { this.attachmentName = attachmentName; }
+
+    public String getAttachmentType() { return attachmentType; }
+    public void setAttachmentType(String attachmentType) { this.attachmentType = attachmentType; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
