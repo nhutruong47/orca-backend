@@ -28,13 +28,14 @@ public class TaskService {
     private final TaskTransferRepository transferRepo;
     private final TaskDependencyRepository dependencyRepo;
     private final InventoryRepository inventoryRepo;
+    private final SalaryPayoutRepository salaryPayoutRepo;
 
     public TaskService(TaskRepository taskRepo, GoalRepository goalRepo,
             UserRepository userRepo, TaskChecklistRepository checklistRepo,
             NotificationService notificationService, TeamMemberRepository teamMemberRepo,
             AttendanceRepository attendanceRepo,
             TaskTransferRepository transferRepo, TaskDependencyRepository dependencyRepo,
-            InventoryRepository inventoryRepo) {
+            InventoryRepository inventoryRepo, SalaryPayoutRepository salaryPayoutRepo) {
         this.taskRepo = taskRepo;
         this.goalRepo = goalRepo;
         this.userRepo = userRepo;
@@ -45,6 +46,7 @@ public class TaskService {
         this.transferRepo = transferRepo;
         this.dependencyRepo = dependencyRepo;
         this.inventoryRepo = inventoryRepo;
+        this.salaryPayoutRepo = salaryPayoutRepo;
     }
 
     public List<TaskDTO> getByGoal(UUID goalId) {
@@ -56,7 +58,7 @@ public class TaskService {
     }
 
     public List<TaskDTO> getAll() {
-        return taskRepo.findAll().stream().map(this::toDTO).collect(Collectors.toList());
+        return taskRepo.findAllByOrderByCreatedAtDesc().stream().map(this::toDTO).collect(Collectors.toList());
     }
 
     public List<TaskDTO> getAllVisibleTo(User user) {
@@ -102,11 +104,16 @@ public class TaskService {
     }
 
     public TaskDTO updateStatus(UUID id, String status) {
+        if (!Set.of("PENDING", "IN_PROGRESS", "COMPLETED", "CANCELLED").contains(status)) {
+            throw new RuntimeException("Trạng thái không hợp lệ");
+        }
         Task t = taskRepo.findById(id).orElseThrow(() -> new RuntimeException("Task not found"));
+        String oldStatus = t.getStatus();
         t.setStatus(status);
         if ("COMPLETED".equals(status)) {
             t.setCompletionPercentage(100);
         }
+        handleInventoryDeduction(t, oldStatus);
         Task saved = taskRepo.save(t);
 
         // Update goal progress
@@ -118,11 +125,12 @@ public class TaskService {
     }
 
     private void handleInventoryDeduction(Task t, String oldStatus) {
-        if (!"COMPLETED".equals(oldStatus) && "COMPLETED".equals(t.getStatus())) {
-            if (t.getGoal() != null && t.getGoal().getTeam() != null) {
-                double qty = t.getActualOutput() != null ? t.getActualOutput() : 
-                            (t.getWorkload() != null ? t.getWorkload() : 0.0);
-                if (qty > 0) {
+        if (t.getGoal() != null && t.getGoal().getTeam() != null) {
+            double qty = t.getActualOutput() != null ? t.getActualOutput() : 
+                        (t.getWorkload() != null ? t.getWorkload() : 0.0);
+            if (qty > 0) {
+                if (!"COMPLETED".equals(oldStatus) && "COMPLETED".equals(t.getStatus())) {
+                    // Trừ tồn kho khi task hoàn thành
                     List<InventoryItem> items = inventoryRepo.findByTeamIdOrderByProductTypeAscProductStateAsc(t.getGoal().getTeam().getId());
                     if (!items.isEmpty()) {
                         InventoryItem target = items.stream()
@@ -131,6 +139,18 @@ public class TaskService {
                             .findFirst()
                             .orElse(items.get(0));
                         target.setQuantity(Math.max(0, target.getQuantity() - qty));
+                        inventoryRepo.save(target);
+                    }
+                } else if ("COMPLETED".equals(oldStatus) && !"COMPLETED".equals(t.getStatus())) {
+                    // Cộng lại tồn kho (revert) khi task từ COMPLETED chuyển về trạng thái khác
+                    List<InventoryItem> items = inventoryRepo.findByTeamIdOrderByProductTypeAscProductStateAsc(t.getGoal().getTeam().getId());
+                    if (!items.isEmpty()) {
+                        InventoryItem target = items.stream()
+                            .filter(i -> t.getTitle() != null && i.getProductType() != null && 
+                                       t.getTitle().toLowerCase().contains(i.getProductType().toLowerCase()))
+                            .findFirst()
+                            .orElse(items.get(0));
+                        target.setQuantity(target.getQuantity() + qty);
                         inventoryRepo.save(target);
                     }
                 }
@@ -161,8 +181,21 @@ public class TaskService {
         return toDTO(taskRepo.save(t));
     }
 
-    public TaskDTO update(UUID id, Map<String, Object> updates) {
+    public TaskDTO update(UUID id, Map<String, Object> updates, User requester) {
         Task t = taskRepo.findById(id).orElseThrow(() -> new RuntimeException("Task not found"));
+        
+        if (requester != null && requester.getRole() != Role.ADMIN) {
+            UUID teamId = t.getGoal() != null && t.getGoal().getTeam() != null ? t.getGoal().getTeam().getId() : null;
+            if (teamId != null) {
+                TeamMember tm = teamMemberRepo.findByTeamIdAndUserId(teamId, requester.getId()).orElse(null);
+                boolean isAdmin = tm != null && tm.getGroupRole() == GroupRole.ADMIN;
+                if (!isAdmin) {
+                    // Assignee can only update their own progress, not targets/deadlines
+                    updates.keySet().retainAll(Set.of("status", "completionPercentage", "actualWorkload", "actualOutput"));
+                }
+            }
+        }
+
         if (updates.containsKey("title")) t.setTitle((String) updates.get("title"));
         if (updates.containsKey("description")) t.setDescription((String) updates.get("description"));
         if (updates.containsKey("priority")) {
@@ -711,5 +744,24 @@ public class TaskService {
                 "totalEmployees", report.size(),
                 "totalSalary", totalSalary,
                 "currency", "VND");
+    }
+
+    public void saveSalaryPayout(UUID teamId, UUID actorId, double totalAmount, Long payosOrderId, String checkoutUrl) {
+        SalaryPayout sp = new SalaryPayout();
+        Team team = goalRepo.findByTeamId(teamId).stream().findFirst().map(Goal::getTeam).orElse(null);
+        if (team == null) {
+            // Find team via member since goal might not exist
+            team = teamMemberRepo.findByTeamId(teamId).stream().findFirst().map(TeamMember::getTeam).orElse(null);
+        }
+        User actor = userRepo.findById(actorId).orElse(null);
+        if (team != null && actor != null) {
+            sp.setTeam(team);
+            sp.setUser(actor);
+            sp.setTotalAmount(totalAmount);
+            sp.setPayosOrderId(payosOrderId);
+            sp.setPayosCheckoutUrl(checkoutUrl);
+            sp.setStatus("PENDING");
+            salaryPayoutRepo.save(sp);
+        }
     }
 }

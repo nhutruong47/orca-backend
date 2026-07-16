@@ -154,6 +154,9 @@ public class ProductionOrderService {
     }
 
     public ProductionOrder updateStatus(UUID orderId, String status) {
+        if (!java.util.Set.of("PENDING", "IN_PROGRESS", "COMPLETED", "CANCELLED", "RFQ_CREATED", "QUOTED", "CONFIRMED", "ACCEPTED", "REJECTED").contains(status)) {
+            throw new RuntimeException("Trạng thái không hợp lệ");
+        }
         ProductionOrder order = getById(orderId);
         order.setStatus(status);
         return orderRepo.save(order);

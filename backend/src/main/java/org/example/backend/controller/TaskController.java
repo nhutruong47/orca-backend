@@ -87,7 +87,7 @@ public class TaskController {
     @PatchMapping("/{id}")
     public ResponseEntity<?> updateTask(@PathVariable UUID id, @RequestBody Map<String, Object> body, @AuthenticationPrincipal User user) {
         accessControlService.requireTaskModifierAccess(user, id);
-        return ResponseEntity.ok(taskService.update(id, body));
+        return ResponseEntity.ok(taskService.update(id, body, user));
     }
 
     @PatchMapping("/{id}/status")
@@ -212,6 +212,22 @@ public class TaskController {
         
         // Generate PayOS link
         Map<String, Object> payosResult = payosPaymentService.createSalaryPaymentLink(user, teamId.toString(), (long) totalSalary);
+        
+        // Extract order code and url
+        Long orderCode = null;
+        String checkoutUrl = null;
+        if (payosResult != null && payosResult.get("data") instanceof Map) {
+            Map<?, ?> dataMap = (Map<?, ?>) payosResult.get("data");
+            if (dataMap.containsKey("orderCode")) {
+                Object codeObj = dataMap.get("orderCode");
+                orderCode = codeObj instanceof Number ? ((Number) codeObj).longValue() : Long.parseLong(codeObj.toString());
+            }
+            if (dataMap.containsKey("checkoutUrl")) {
+                checkoutUrl = dataMap.get("checkoutUrl").toString();
+            }
+        }
+        
+        taskService.saveSalaryPayout(teamId, user.getId(), totalSalary, orderCode, checkoutUrl);
         return ResponseEntity.ok(payosResult);
     }
 

@@ -102,6 +102,12 @@ public class TeamController {
         return ResponseEntity.ok().build();
     }
 
+    @PostMapping("/{id}/rotate-invite-code")
+    public ResponseEntity<?> rotateInviteCode(@PathVariable UUID id, Authentication auth) {
+        Map<String, String> result = teamService.rotateInviteCode(id, auth.getName());
+        return ResponseEntity.ok(result);
+    }
+
     @PutMapping("/{id}/advertise")
     public ResponseEntity<?> advertiseTeam(
             @PathVariable UUID id,

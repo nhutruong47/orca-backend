@@ -144,6 +144,10 @@ public class Team {
         }
     }
 
+    public void rotateInviteCode() {
+        this.inviteCode = generateInviteCode();
+    }
+
     private static String generateInviteCode() {
         String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         Random rnd = new Random();

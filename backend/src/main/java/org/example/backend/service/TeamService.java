@@ -230,13 +230,38 @@ public class TeamService {
 
         User requester = userRepository.findByUsername(requesterUsername)
                 .orElseThrow(() -> new RuntimeException("User not found"));
-        checkAdminRole(team, requester);
+        if (!team.getOwner().getId().equals(requester.getId())) {
+            throw new RuntimeException("Only the group OWNER can delete the group.");
+        }
 
         // Xóa tất cả members trước
         List<TeamMember> members = teamMemberRepository.findByTeamId(teamId);
         teamMemberRepository.deleteAll(members);
 
         teamRepository.delete(team);
+    }
+
+    /**
+     * Quay mã mời mới để chặn truy cập trái phép
+     */
+    @Transactional
+    public Map<String, String> rotateInviteCode(UUID teamId, String requesterUsername) {
+        Team team = teamRepository.findById(teamId)
+                .orElseThrow(() -> new RuntimeException("Team not found"));
+
+        User requester = userRepository.findByUsername(requesterUsername)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        checkAdminRole(team, requester);
+
+        team.rotateInviteCode();
+        teamRepository.save(team);
+
+        return Map.of(
+                "status", "SUCCESS",
+                "message", "Đã cấp lại mã mời mới",
+                "newInviteCode", team.getInviteCode()
+        );
     }
 
     /**
