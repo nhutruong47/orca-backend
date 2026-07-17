@@ -57,7 +57,7 @@ public class InventoryController {
     @PutMapping("/{id}")
     public ResponseEntity<?> update(
             @PathVariable UUID id,
-            @Valid @RequestBody InventoryItemDTO dto,
+            @RequestBody InventoryItemDTO dto,
             @AuthenticationPrincipal User user) {
         accessControlService.requireInventoryItemAccess(user, id);
         return ResponseEntity.ok(inventoryService.update(id, dto));

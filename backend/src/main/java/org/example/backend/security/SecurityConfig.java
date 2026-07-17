@@ -70,6 +70,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/login", "/api/auth/register").permitAll()
                         .requestMatchers("/api/auth/**").authenticated()
                         .requestMatchers(
+                                "/api/payments/plans",
                                 "/api/payments/vnpay/return",
                                 "/api/payments/vnpay/ipn",
                                 "/api/payments/momo/return",

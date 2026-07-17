@@ -22,16 +22,14 @@ import java.util.Map;
 public class PaymentController {
 
     private final VnpayPaymentService vnpayPaymentService;
-    private final org.example.backend.repository.SubscriptionPlanRepository planRepository;
 
-    public PaymentController(VnpayPaymentService vnpayPaymentService, org.example.backend.repository.SubscriptionPlanRepository planRepository) {
+    public PaymentController(VnpayPaymentService vnpayPaymentService) {
         this.vnpayPaymentService = vnpayPaymentService;
-        this.planRepository = planRepository;
     }
 
     @GetMapping("/plans")
-    public ResponseEntity<java.util.List<org.example.backend.entity.SubscriptionPlan>> getPlans() {
-        return ResponseEntity.ok(planRepository.findAll());
+    public ResponseEntity<java.util.List<Map<String, Object>>> getPlans() {
+        return ResponseEntity.ok(vnpayPaymentService.getPublicPlans());
     }
 
     @PostMapping("/vnpay/create")

@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
+import java.text.Normalizer;
 import java.util.stream.Collectors;
 
 @Service
@@ -85,6 +86,7 @@ public class InventoryService {
     public InventoryItemDTO updateQuantity(UUID id, Double newQuantity) {
         InventoryItem item = inventoryRepo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Item not found"));
+        ensureVersion(item);
         item.setQuantity(newQuantity);
         InventoryItem saved = inventoryRepo.save(item);
         if (saved.getTeam() != null) {
@@ -97,9 +99,19 @@ public class InventoryService {
     public InventoryItemDTO update(UUID id, InventoryItemDTO dto) {
         InventoryItem item = inventoryRepo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Item not found"));
+        ensureVersion(item);
 
-        if (dto.getDisplayName() != null) {
-            item.setProductType(dto.getDisplayName());
+        String nextProductType = firstNonBlank(dto.getProductType(), dto.getDisplayName(), dto.getName());
+        if (nextProductType != null) {
+            ParsedInventoryName parsed = parseInventoryName(nextProductType);
+            item.setProductType(parsed.productType());
+            if (dto.getProductState() != null && !dto.getProductState().isBlank()) {
+                item.setProductState(dto.getProductState());
+            } else if (parsed.productState() != null) {
+                item.setProductState(parsed.productState());
+            }
+        } else if (dto.getProductState() != null && !dto.getProductState().isBlank()) {
+            item.setProductState(dto.getProductState());
         }
         if (dto.getQuantity() != null) {
             item.setQuantity(dto.getQuantity());
@@ -117,6 +129,63 @@ public class InventoryService {
                     new AsyncIndexerService.InventoryChanged(saved.getTeam().getId(), saved.getId()));
         }
         return toDTO(saved);
+    }
+
+    private record ParsedInventoryName(String productType, String productState) {}
+
+    private ParsedInventoryName parseInventoryName(String value) {
+        String trimmed = value != null ? value.trim() : "";
+        if (trimmed.isEmpty()) {
+            return new ParsedInventoryName(trimmed, null);
+        }
+
+        String[] parts = trimmed.split("\\s+-\\s+", 2);
+        if (parts.length < 2) {
+            return new ParsedInventoryName(trimmed, null);
+        }
+
+        String state = stateFromLabel(parts[1]);
+        if (state == null) {
+            return new ParsedInventoryName(trimmed, null);
+        }
+        return new ParsedInventoryName(parts[0].trim(), state);
+    }
+
+    private String stateFromLabel(String label) {
+        String normalized = Normalizer.normalize(label == null ? "" : label, Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .replace('đ', 'd')
+                .replace('Đ', 'D')
+                .toLowerCase(Locale.ROOT)
+                .trim();
+        return switch (normalized) {
+            case "hat xanh", "green" -> "GREEN";
+            case "da rang", "rang", "roasted" -> "ROASTED";
+            case "xay", "da xay", "ground" -> "GROUND";
+            case "dong goi", "da dong goi", "packaged" -> "PACKAGED";
+            default -> {
+                if (normalized.contains("xanh") || normalized.contains("green")) yield "GREEN";
+                if (normalized.contains("rang") || normalized.contains("roasted")) yield "ROASTED";
+                if (normalized.contains("xay") || normalized.contains("ground")) yield "GROUND";
+                if (normalized.contains("dong goi") || normalized.contains("packaged")) yield "PACKAGED";
+                yield null;
+            }
+        };
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private void ensureVersion(InventoryItem item) {
+        if (item.getVersion() == null) {
+            item.setVersion(0L);
+        }
     }
 
     // ========== DELETE ==========

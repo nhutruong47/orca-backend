@@ -94,43 +94,46 @@ public class AdminService {
     }
 
     @PostConstruct
+    @Transactional
     public void seedDefaultPlans() {
-        if (planRepository.count() == 0) {
-            SubscriptionPlan basic = new SubscriptionPlan();
-            basic.setName("Cơ bản");
-            basic.setPrice(499000.0);
-            basic.setPeriod("Tháng");
-            basic.setMaxUsers(5);
-            basic.setMaxOrders(100);
-            basic.setMaxBatches(300);
-            basic.setMaxWorkshops(1);
-            basic.setAiLimit(5000);
-            basic.setFeatures("Bảng đơn hàng,Theo dõi lô sản xuất,Báo cáo cơ bản");
-            
-            SubscriptionPlan growth = new SubscriptionPlan();
-            growth.setName("Tăng trưởng");
-            growth.setPrice(1499000.0);
-            growth.setPeriod("Tháng");
-            growth.setMaxUsers(30);
-            growth.setMaxOrders(1000);
-            growth.setMaxBatches(5000);
-            growth.setMaxWorkshops(5);
-            growth.setAiLimit(40000);
-            growth.setFeatures("Quy trình QC,Trợ lý AI,Xuất dữ liệu thanh toán");
+        upsertDefaultPlan("Free", 0.0, 3, 50, 100, 1, 10,
+                "AI tạo task từ đơn hàng,Theo dõi tiến độ sản xuất,Báo cáo vận hành cơ bản",
+                List.of("Cơ bản", "Starter", "Miễn phí"));
+        upsertDefaultPlan("Plus", 129000.0, 30, 1000, 5000, 5, 100,
+                "Cảnh báo trễ,Cảnh báo thiếu nguyên liệu,Phân tích hiệu suất,Phát hiện điểm nghẽn,Đề xuất tối ưu",
+                List.of("Professional", "Chuyên nghiệp", "Tăng trưởng"));
+        upsertDefaultPlan("Doanh nghiệp", 249000.0, 500, 99999, 99999, 50, 999999,
+                "Lập kế hoạch dài hạn,Dự báo nhu cầu,Mô phỏng kịch bản,Quản lý nhiều xưởng,Thương hiệu riêng",
+                List.of("Enterprise"));
+    }
 
-            SubscriptionPlan enterprise = new SubscriptionPlan();
-            enterprise.setName("Doanh nghiệp");
-            enterprise.setPrice(0.0);
-            enterprise.setPeriod("Năm");
-            enterprise.setMaxUsers(500);
-            enterprise.setMaxOrders(99999);
-            enterprise.setMaxBatches(99999);
-            enterprise.setMaxWorkshops(50);
-            enterprise.setAiLimit(500000);
-            enterprise.setFeatures("Cam kết dịch vụ,Quy trình tùy chỉnh,Giới hạn AI riêng");
+    private void upsertDefaultPlan(
+            String name,
+            double price,
+            int maxUsers,
+            int maxOrders,
+            int maxBatches,
+            int maxWorkshops,
+            int aiLimit,
+            String features,
+            List<String> aliases) {
+        SubscriptionPlan plan = planRepository.findByNameIgnoreCase(name)
+                .or(() -> aliases.stream()
+                        .map(planRepository::findByNameIgnoreCase)
+                        .flatMap(java.util.Optional::stream)
+                        .findFirst())
+                .orElseGet(SubscriptionPlan::new);
 
-            planRepository.saveAll(List.of(basic, growth, enterprise));
-        }
+        plan.setName(name);
+        plan.setPrice(price);
+        plan.setPeriod("Tháng");
+        plan.setMaxUsers(maxUsers);
+        plan.setMaxOrders(maxOrders);
+        plan.setMaxBatches(maxBatches);
+        plan.setMaxWorkshops(maxWorkshops);
+        plan.setAiLimit(aiLimit);
+        plan.setFeatures(features);
+        planRepository.save(plan);
     }
 
     @Transactional(readOnly = true)
@@ -474,7 +477,9 @@ public class AdminService {
     }
 
     public List<SubscriptionPlan> getPlans() {
-        return planRepository.findAll();
+        return planRepository.findAll().stream()
+                .sorted(Comparator.comparing(plan -> plan.getPrice() == null ? Double.MAX_VALUE : plan.getPrice()))
+                .toList();
     }
 
     @Transactional

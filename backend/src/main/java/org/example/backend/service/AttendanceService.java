@@ -50,9 +50,9 @@ public class AttendanceService {
     public AttendanceDTO checkIn(UUID userId, UUID teamId, ShiftType shiftType,
                                  Attendance.ProductionStage stage, UUID orderId, Integer breakMinutes) {
         LocalDate today = LocalDate.now();
-        Optional<Attendance> existing = attendanceRepo.findByUserIdAndTeamIdAndDate(userId, teamId, today);
+        Optional<Attendance> existing = attendanceRepo.findFirstByUserIdAndTeamIdAndDateAndCheckOutTimeIsNullOrderByCheckInTimeDesc(userId, teamId, today);
         if (existing.isPresent()) {
-            throw new RuntimeException("Ban da check-in hom nay roi");
+            throw new RuntimeException("Ban dang trong ca lam, hay tan ca truoc khi vao ca moi");
         }
 
         User user = userRepo.findById(userId)
@@ -83,8 +83,8 @@ public class AttendanceService {
 
     public AttendanceDTO checkOut(UUID userId, UUID teamId) {
         LocalDate today = LocalDate.now();
-        Attendance a = attendanceRepo.findByUserIdAndTeamIdAndDate(userId, teamId, today)
-                .orElseThrow(() -> new RuntimeException("Ban chua check-in hom nay"));
+        Attendance a = attendanceRepo.findFirstByUserIdAndTeamIdAndDateAndCheckOutTimeIsNullOrderByCheckInTimeDesc(userId, teamId, today)
+                .orElseThrow(() -> new RuntimeException("Ban chua vao ca hoac da tan ca"));
 
         if (a.getCheckOutTime() != null) {
             throw new RuntimeException("Ban da check-out hom nay roi");
@@ -126,14 +126,15 @@ public class AttendanceService {
 
     public AttendanceDTO getTodayAttendance(UUID userId, UUID teamId) {
         LocalDate today = LocalDate.now();
-        return attendanceRepo.findByUserIdAndTeamIdAndDate(userId, teamId, today)
+        return attendanceRepo.findFirstByUserIdAndTeamIdAndDateAndCheckOutTimeIsNullOrderByCheckInTimeDesc(userId, teamId, today)
+                .or(() -> attendanceRepo.findFirstByUserIdAndTeamIdAndDateOrderByCheckInTimeDesc(userId, teamId, today))
                 .map(this::toDTO)
                 .orElse(null);
     }
 
     public List<AttendanceDTO> getAttendanceHistory(UUID userId, UUID teamId) {
         return attendanceRepo.findByUserIdAndTeamId(userId, teamId).stream()
-                .sorted((a, b) -> b.getDate().compareTo(a.getDate()))
+                .sorted((a, b) -> b.getCheckInTime().compareTo(a.getCheckInTime()))
                 .map(this::toDTO)
                 .collect(Collectors.toList());
     }
@@ -147,7 +148,7 @@ public class AttendanceService {
 
     public List<AttendanceDTO> getTeamAttendanceHistory(UUID teamId) {
         return attendanceRepo.findByTeamId(teamId).stream()
-                .sorted((a, b) -> b.getDate().compareTo(a.getDate()))
+                .sorted((a, b) -> b.getCheckInTime().compareTo(a.getCheckInTime()))
                 .map(this::toDTO)
                 .collect(Collectors.toList());
     }

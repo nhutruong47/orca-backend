@@ -17,6 +17,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 @Service
@@ -31,8 +32,9 @@ public class PayosPaymentService {
     private String frontendUrl;
 
     private static final List<Plan> PLANS = List.of(
-            new Plan("professional", "Professional", 129000, 500000),
-            new Plan("enterprise", "Enterprise", 249000, 1500000)
+            new Plan("free", "Free", 0, 10),
+            new Plan("plus", "Plus", 129000, 100),
+            new Plan("enterprise", "Doanh nghiệp", 249000, 999999)
     );
 
     public PayosPaymentService(PayOS payOS, PaymentTransactionRepository paymentRepository, UserRepository userRepository, ObjectMapper objectMapper) {
@@ -154,23 +156,36 @@ public class PayosPaymentService {
 
     private void activatePlan(User user, String planId) {
         if (user == null) return;
-        user.setAiPlan(planId);
-        if ("enterprise".equalsIgnoreCase(planId)) {
+        String normalizedPlanId = normalizePlanId(planId);
+        user.setAiPlan(normalizedPlanId);
+        if ("enterprise".equalsIgnoreCase(normalizedPlanId)) {
             user.setAiPlanExpiresAt(LocalDateTime.now().plusDays(30));
-        } else if ("professional".equalsIgnoreCase(planId) || "plus".equalsIgnoreCase(planId)) {
+        } else if ("plus".equalsIgnoreCase(normalizedPlanId)) {
             user.setAiUsageCount(0);
             user.setAiPlanExpiresAt(null);
         } else {
-            user.setAiPlanExpiresAt(LocalDateTime.now().plusMonths(1));
+            user.setAiPlanExpiresAt(null);
         }
         userRepository.save(user);
     }
 
     private Plan findPlan(String planId) {
+        String normalizedPlanId = normalizePlanId(planId);
         return PLANS.stream()
-                .filter(plan -> plan.id().equalsIgnoreCase(planId))
+                .filter(plan -> plan.id().equalsIgnoreCase(normalizedPlanId))
                 .findFirst()
                 .orElseThrow(() -> new RuntimeException("Goi AI khong hop le"));
+    }
+
+    private String normalizePlanId(String planId) {
+        if (planId == null) {
+            return "";
+        }
+        String normalized = planId.trim().toLowerCase(Locale.ROOT);
+        if ("professional".equals(normalized)) {
+            return "plus";
+        }
+        return normalized;
     }
 
     private record Plan(String id, String name, long monthlyPrice, long tokenLimit) {}

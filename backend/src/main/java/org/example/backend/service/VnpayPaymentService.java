@@ -36,8 +36,12 @@ public class VnpayPaymentService {
     private static final ZoneId VIETNAM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private static final DateTimeFormatter VNPAY_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
     private static final List<Plan> PLANS = List.of(
-            new Plan("professional", "Professional", 129000, 500000),
-            new Plan("enterprise", "Enterprise", 249000, 1500000)
+            new Plan("free", "Free", 0, 10, 3, 50, 1,
+                    "AI tạo task từ đơn hàng,Theo dõi tiến độ sản xuất,Báo cáo vận hành cơ bản"),
+            new Plan("plus", "Plus", 129000, 100, 30, 1000, 5,
+                    "Cảnh báo trễ,Cảnh báo thiếu nguyên liệu,Phân tích hiệu suất,Phát hiện điểm nghẽn,Đề xuất tối ưu"),
+            new Plan("enterprise", "Doanh nghiệp", 249000, 999999, 500, 99999, 50,
+                    "Lập kế hoạch dài hạn,Dự báo nhu cầu,Mô phỏng kịch bản,Quản lý nhiều xưởng,Thương hiệu riêng")
     );
 
     private final PaymentTransactionRepository paymentRepository;
@@ -71,6 +75,24 @@ public class VnpayPaymentService {
     public VnpayPaymentService(PaymentTransactionRepository paymentRepository, UserRepository userRepository) {
         this.paymentRepository = paymentRepository;
         this.userRepository = userRepository;
+    }
+
+    public List<Map<String, Object>> getPublicPlans() {
+        return PLANS.stream()
+                .map(plan -> {
+                    Map<String, Object> out = new LinkedHashMap<>();
+                    out.put("id", plan.id());
+                    out.put("name", plan.name());
+                    out.put("price", plan.monthlyPrice());
+                    out.put("period", "Tháng");
+                    out.put("users", plan.maxUsers());
+                    out.put("orders", plan.maxOrders());
+                    out.put("workshops", plan.maxWorkshops());
+                    out.put("ai", plan.tokenLimit());
+                    out.put("features", plan.features());
+                    return out;
+                })
+                .toList();
     }
 
     @Transactional
@@ -417,10 +439,22 @@ public class VnpayPaymentService {
     }
 
     private Plan findPlan(String planId) {
+        String normalizedPlanId = normalizePlanId(planId);
         return PLANS.stream()
-                .filter(plan -> plan.id().equalsIgnoreCase(planId))
+                .filter(plan -> plan.id().equalsIgnoreCase(normalizedPlanId))
                 .findFirst()
                 .orElseThrow(() -> new RuntimeException("Goi AI khong hop le"));
+    }
+
+    private String normalizePlanId(String planId) {
+        if (planId == null) {
+            return "";
+        }
+        String normalized = planId.trim().toLowerCase(Locale.ROOT);
+        if ("professional".equals(normalized)) {
+            return "plus";
+        }
+        return normalized;
     }
 
 
@@ -449,15 +483,16 @@ public class VnpayPaymentService {
     }
 
     private void activatePlan(User user, String planId) {
-        user.setAiPlan(planId);
+        String normalizedPlanId = normalizePlanId(planId);
+        user.setAiPlan(normalizedPlanId);
         
-        if ("enterprise".equalsIgnoreCase(planId)) {
+        if ("enterprise".equalsIgnoreCase(normalizedPlanId)) {
             user.setAiPlanExpiresAt(LocalDateTime.now().plusDays(30));
-        } else if ("professional".equalsIgnoreCase(planId) || "plus".equalsIgnoreCase(planId)) {
+        } else if ("plus".equalsIgnoreCase(normalizedPlanId)) {
             user.setAiUsageCount(0); // Reset usages to 0 to give 100 new uses
             user.setAiPlanExpiresAt(null); // Optional: if Plus doesn't expire by time
         } else {
-            user.setAiPlanExpiresAt(LocalDateTime.now().plusMonths(1));
+            user.setAiPlanExpiresAt(null);
         }
         
         userRepository.save(user);
@@ -504,6 +539,15 @@ public class VnpayPaymentService {
         return result;
     }
 
-    private record Plan(String id, String name, long monthlyPrice, long tokenLimit) {
+    private record Plan(
+            String id,
+            String name,
+            long monthlyPrice,
+            long tokenLimit,
+            int maxUsers,
+            int maxOrders,
+            int maxWorkshops,
+            String features
+    ) {
     }
 }
