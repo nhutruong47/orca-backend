@@ -5,6 +5,7 @@ import org.example.backend.dto.AnalyticsDTO.*;
 import org.example.backend.entity.*;
 import org.example.backend.repository.*;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -12,6 +13,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
+@Transactional
 public class AnalyticsService {
 
     private final DailyTargetRepository targetRepo;

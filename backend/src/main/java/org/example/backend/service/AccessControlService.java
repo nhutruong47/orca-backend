@@ -22,10 +22,12 @@ import org.example.backend.repository.DailyTargetRepository;
 import org.example.backend.repository.UserRepository;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
 @Service
+@Transactional(readOnly = true)
 public class AccessControlService {
 
     private final TeamMemberRepository teamMemberRepository;

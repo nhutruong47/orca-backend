@@ -94,6 +94,31 @@ public class InventoryService {
         return toDTO(saved);
     }
 
+    public InventoryItemDTO update(UUID id, InventoryItemDTO dto) {
+        InventoryItem item = inventoryRepo.findById(id)
+                .orElseThrow(() -> new RuntimeException("Item not found"));
+
+        if (dto.getDisplayName() != null) {
+            item.setProductType(dto.getDisplayName());
+        }
+        if (dto.getQuantity() != null) {
+            item.setQuantity(dto.getQuantity());
+        }
+        if (dto.getUnit() != null) {
+            item.setUnit(dto.getUnit());
+        }
+        if (dto.getLowStockThreshold() != null) {
+            item.setLowStockThreshold(dto.getLowStockThreshold());
+        }
+
+        InventoryItem saved = inventoryRepo.save(item);
+        if (saved.getTeam() != null) {
+            eventPublisher.publishEvent(
+                    new AsyncIndexerService.InventoryChanged(saved.getTeam().getId(), saved.getId()));
+        }
+        return toDTO(saved);
+    }
+
     // ========== DELETE ==========
 
     public void delete(UUID id) {

@@ -31,7 +31,7 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, UUID> 
            "  FROM chat_messages " +
            "  WHERE team_id = :teamId AND recipient_id IS NOT NULL " +
            "  AND (sender_id = :userId OR recipient_id = :userId) " +
-           "  GROUP BY CASE WHEN sender_id = :userId THEN recipient_id ELSE sender_id END) latest " +
+           "  GROUP BY 1) latest " +
            "ON m.created_at = latest.max_time " +
            "AND m.team_id = :teamId AND m.recipient_id IS NOT NULL " +
            "AND (m.sender_id = :userId OR m.recipient_id = :userId) " +

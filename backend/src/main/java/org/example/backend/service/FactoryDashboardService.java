@@ -8,6 +8,7 @@ import org.example.backend.entity.DailyTarget;
 import org.example.backend.entity.ProductionOrder;
 import org.example.backend.repository.*;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -16,6 +17,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
+@Transactional
 public class FactoryDashboardService {
 
     private final ProductionOrderRepository orderRepo;

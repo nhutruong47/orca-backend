@@ -9,13 +9,13 @@ import java.util.UUID;
 public interface InterGroupOrderRepository extends JpaRepository<InterGroupOrder, UUID> {
 
     // Đơn mình đi đặt (Xưởng của mình là Buyer)
-    @EntityGraph(attributePaths = {"buyerTeam", "buyerUser", "sellerTeam", "items"})
+    @EntityGraph(attributePaths = {"buyerTeam", "buyerUser", "sellerTeam"})
     List<InterGroupOrder> findByBuyerTeamIdOrderByCreatedAtDesc(UUID buyerTeamId);
 
-    @EntityGraph(attributePaths = {"buyerTeam", "buyerUser", "sellerTeam", "items"})
+    @EntityGraph(attributePaths = {"buyerTeam", "buyerUser", "sellerTeam"})
     List<InterGroupOrder> findByBuyerUserIdOrderByCreatedAtDesc(UUID buyerUserId);
 
     // Đơn xưởng khác đặt mình (Xưởng của mình là Seller)
-    @EntityGraph(attributePaths = {"buyerTeam", "buyerUser", "sellerTeam", "items"})
+    @EntityGraph(attributePaths = {"buyerTeam", "buyerUser", "sellerTeam"})
     List<InterGroupOrder> findBySellerTeamIdOrderByCreatedAtDesc(UUID sellerTeamId);
 }

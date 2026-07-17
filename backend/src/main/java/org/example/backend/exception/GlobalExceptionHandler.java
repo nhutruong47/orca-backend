@@ -104,7 +104,10 @@ public class GlobalExceptionHandler {
         body.put("error", "Lỗi validation");
 
         Map<String, String> fieldErrors = new LinkedHashMap<>();
-        ex.getBindingResult().getFieldErrors().forEach(fe -> fieldErrors.put(fe.getField(), fe.getDefaultMessage()));
+        ex.getBindingResult().getFieldErrors().forEach(fe -> {
+            System.err.println("Validation Error: " + fe.getField() + " - " + fe.getDefaultMessage());
+            fieldErrors.put(fe.getField(), fe.getDefaultMessage());
+        });
         body.put("fields", fieldErrors);
         body.put("message", "Có " + fieldErrors.size() + " trường không hợp lệ");
 

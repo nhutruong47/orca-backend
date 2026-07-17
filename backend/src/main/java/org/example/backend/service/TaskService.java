@@ -5,6 +5,7 @@ import org.example.backend.dto.SalaryDTO;
 import org.example.backend.entity.*;
 import org.example.backend.repository.*;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -16,6 +17,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
+@Transactional
 public class TaskService {
 
     private final TaskRepository taskRepo;
@@ -260,15 +262,26 @@ public class TaskService {
 
     public TaskDTO assign(UUID id, UUID memberId) {
         Task t = taskRepo.findById(id).orElseThrow(() -> new RuntimeException("Task not found"));
+        
+        if (memberId == null) {
+            t.setMember(null);
+            t.setAcceptanceStatus("WAITING");
+            Task saved = taskRepo.save(t);
+            return toDTO(saved);
+        }
+
         User member = userRepo.findById(memberId).orElseThrow(() -> new RuntimeException("User not found"));
         
         // Validate if member is in the team
         if (t.getGoal() != null && t.getGoal().getTeam() != null) {
             UUID teamId = t.getGoal().getTeam().getId();
-            boolean isMember = teamMemberRepo.findByTeamId(teamId).stream()
-                .anyMatch(tm -> tm.getUser().getId().equals(memberId));
-            if (!isMember) {
-                throw new RuntimeException("Người dùng không thuộc xưởng này. Không thể giao việc.");
+            // Team owner shouldn't be blocked from being assigned
+            if (!t.getGoal().getTeam().getOwner().getId().equals(memberId)) {
+                boolean isMember = teamMemberRepo.findByTeamId(teamId).stream()
+                    .anyMatch(tm -> tm.getUser().getId().equals(memberId));
+                if (!isMember) {
+                    throw new RuntimeException("Người dùng không thuộc xưởng này. Không thể giao việc.");
+                }
             }
         }
 
@@ -544,15 +557,22 @@ public class TaskService {
 
     public TaskDTO setBackup(UUID id, UUID memberId) {
         Task t = taskRepo.findById(id).orElseThrow(() -> new RuntimeException("Task not found"));
+        if (memberId == null) {
+            t.setBackupMember(null);
+            Task saved = taskRepo.save(t);
+            return toDTO(saved);
+        }
         User member = userRepo.findById(memberId).orElseThrow(() -> new RuntimeException("User not found"));
 
         // Validate if member is in the team
         if (t.getGoal() != null && t.getGoal().getTeam() != null) {
             UUID teamId = t.getGoal().getTeam().getId();
-            boolean isMember = teamMemberRepo.findByTeamId(teamId).stream()
-                .anyMatch(tm -> tm.getUser().getId().equals(memberId));
-            if (!isMember) {
-                throw new RuntimeException("Người dùng không thuộc xưởng này. Không thể làm người sao lưu.");
+            if (!t.getGoal().getTeam().getOwner().getId().equals(memberId)) {
+                boolean isMember = teamMemberRepo.findByTeamId(teamId).stream()
+                    .anyMatch(tm -> tm.getUser().getId().equals(memberId));
+                if (!isMember) {
+                    throw new RuntimeException("Người dùng không thuộc xưởng này. Không thể làm người sao lưu.");
+                }
             }
         }
 

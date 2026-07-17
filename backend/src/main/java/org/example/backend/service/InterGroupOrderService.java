@@ -26,16 +26,19 @@ public class InterGroupOrderService {
     private final NotificationService notificationService;
     private final ReviewRepository reviewRepo;
     private final InventoryService inventoryService;
+    private final org.example.backend.repository.UserRepository userRepository;
 
     public InterGroupOrderService(InterGroupOrderRepository orderRepo, TeamRepository teamRepo,
             GoalRepository goalRepo, NotificationService notificationService,
-            ReviewRepository reviewRepo, InventoryService inventoryService) {
+            ReviewRepository reviewRepo, InventoryService inventoryService,
+            org.example.backend.repository.UserRepository userRepository) {
         this.orderRepo = orderRepo;
         this.teamRepo = teamRepo;
         this.goalRepo = goalRepo;
         this.notificationService = notificationService;
         this.reviewRepo = reviewRepo;
         this.inventoryService = inventoryService;
+        this.userRepository = userRepository;
     }
 
     public List<InterGroupOrderDTO> getOutboundOrders(UUID buyerTeamId) {
@@ -80,6 +83,9 @@ public class InterGroupOrderService {
             mapDeliveryFields(order, dto);
 
             InterGroupOrder saved = orderRepo.save(order);
+
+            currentUser.setTotalOrders(currentUser.getTotalOrders() + 1);
+            userRepository.save(currentUser);
 
             // Notify seller team owner about new order
             String buyerName = currentUser.getFullName() != null && !currentUser.getFullName().isBlank()
@@ -283,6 +289,11 @@ public class InterGroupOrderService {
             int completed = buyer.getCompletedOrders();
             int cancelled = buyer.getCancelledOrders();
             trustScore = (int) ((double) completed / (completed + cancelled) * 100);
+        } else if (buyer == null && order.getBuyerUser() != null && order.getBuyerUser().getTotalOrders() > 0) {
+            User buyerUser = order.getBuyerUser();
+            int completed = buyerUser.getCompletedOrders();
+            int cancelled = buyerUser.getCancelledOrders();
+            trustScore = (int) ((double) completed / (completed + cancelled) * 100);
         }
         dto.setBuyerTrustScore(trustScore);
 
@@ -324,6 +335,9 @@ public class InterGroupOrderService {
             }
         }
 
+        // Lưu lại status cũ để xét xem có phạt uy tín không
+        String oldStatus = order.getStatus();
+
         // Thực hiện hủy ngay
         order.setStatus("CANCELED");
         order.setCancelledBy(isBuyerOwner ? "BUYER" : "SELLER");
@@ -334,15 +348,21 @@ public class InterGroupOrderService {
             order.setBuyerViewed(false);
         }
 
-        // Penalty
-        if (isBuyerOwner && order.getBuyerTeam() != null) {
-            Team buyer = order.getBuyerTeam();
-            buyer.setCancelledOrders(buyer.getCancelledOrders() + 1);
-            teamRepo.save(buyer);
-        } else if (isSellerOwner) {
-            Team seller = order.getSellerTeam();
-            seller.setCancelledOrders(seller.getCancelledOrders() + 1);
-            teamRepo.save(seller);
+        // Penalty: Chỉ phạt uy tín nếu đơn hàng ĐÃ ĐƯỢC XÁC NHẬN (CONFIRMED hoặc ACCEPTED)
+        if ("CONFIRMED".equals(oldStatus) || "ACCEPTED".equals(oldStatus)) {
+            if (isBuyerOwner && order.getBuyerTeam() != null) {
+                Team buyer = order.getBuyerTeam();
+                buyer.setCancelledOrders(buyer.getCancelledOrders() + 1);
+                teamRepo.save(buyer);
+            } else if (isBuyerOwner && order.getBuyerUser() != null) {
+                User buyerUser = order.getBuyerUser();
+                buyerUser.setCancelledOrders(buyerUser.getCancelledOrders() + 1);
+                userRepository.save(buyerUser);
+            } else if (isSellerOwner) {
+                Team seller = order.getSellerTeam();
+                seller.setCancelledOrders(seller.getCancelledOrders() + 1);
+                teamRepo.save(seller);
+            }
         }
 
         InterGroupOrder saved = orderRepo.save(order);
@@ -382,16 +402,24 @@ public class InterGroupOrderService {
             throw new RuntimeException("Đơn hàng không có yêu cầu hủy.");
         }
 
+        String oldStatus = order.getStatus();
+
         order.setStatus("CANCELED");
         order.setCancelledBy("BUYER");
         order.setCancelRequested(false);
         order.setBuyerViewed(false);
 
-        // Penalty cho buyer
-        if (order.getBuyerTeam() != null) {
-            Team buyer = order.getBuyerTeam();
-            buyer.setCancelledOrders(buyer.getCancelledOrders() + 1);
-            teamRepo.save(buyer);
+        // Penalty cho buyer: Chỉ phạt uy tín nếu đơn hàng ĐÃ ĐƯỢC XÁC NHẬN
+        if ("CONFIRMED".equals(oldStatus) || "ACCEPTED".equals(oldStatus)) {
+            if (order.getBuyerTeam() != null) {
+                Team buyer = order.getBuyerTeam();
+                buyer.setCancelledOrders(buyer.getCancelledOrders() + 1);
+                teamRepo.save(buyer);
+            } else if (order.getBuyerUser() != null) {
+                User buyerUser = order.getBuyerUser();
+                buyerUser.setCancelledOrders(buyerUser.getCancelledOrders() + 1);
+                userRepository.save(buyerUser);
+            }
         }
 
         InterGroupOrder saved = orderRepo.save(order);
@@ -579,6 +607,10 @@ public class InterGroupOrderService {
         if (buyer != null) {
             buyer.setCompletedOrders(buyer.getCompletedOrders() + 1);
             teamRepo.save(buyer);
+        } else if (order.getBuyerUser() != null) {
+            User buyerUser = order.getBuyerUser();
+            buyerUser.setCompletedOrders(buyerUser.getCompletedOrders() + 1);
+            userRepository.save(buyerUser);
         }
 
         org.example.backend.entity.Review review = new org.example.backend.entity.Review();
@@ -659,6 +691,10 @@ public class InterGroupOrderService {
         if (buyer != null) {
             buyer.setCompletedOrders(buyer.getCompletedOrders() + 1);
             teamRepo.save(buyer);
+        } else if (order.getBuyerUser() != null) {
+            User buyerUser = order.getBuyerUser();
+            buyerUser.setCompletedOrders(buyerUser.getCompletedOrders() + 1);
+            userRepository.save(buyerUser);
         }
 
         // Save review

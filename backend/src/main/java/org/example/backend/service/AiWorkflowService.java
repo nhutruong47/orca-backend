@@ -13,6 +13,7 @@ import org.example.backend.repository.TeamRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.server.ResponseStatusException;
@@ -22,6 +23,7 @@ import java.util.List;
 import java.util.UUID;
 
 @Service
+@Transactional
 public class AiWorkflowService {
 
     private final TeamMemberRepository teamMemberRepository;

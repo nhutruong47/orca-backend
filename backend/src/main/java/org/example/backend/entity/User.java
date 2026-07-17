@@ -57,6 +57,15 @@ public class User implements UserDetails {
     @Column(name = "locked", nullable = false, columnDefinition = "boolean default false")
     private boolean locked = false;
 
+    @Column(name = "completed_orders", nullable = false, columnDefinition = "integer default 0")
+    private int completedOrders = 0;
+
+    @Column(name = "cancelled_orders", nullable = false, columnDefinition = "integer default 0")
+    private int cancelledOrders = 0;
+
+    @Column(name = "total_orders", nullable = false, columnDefinition = "integer default 0")
+    private int totalOrders = 0;
+
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();
@@ -97,6 +106,30 @@ public class User implements UserDetails {
 
     public void setLocked(boolean locked) {
         this.locked = locked;
+    }
+
+    public int getCompletedOrders() {
+        return completedOrders;
+    }
+
+    public void setCompletedOrders(int completedOrders) {
+        this.completedOrders = completedOrders;
+    }
+
+    public int getCancelledOrders() {
+        return cancelledOrders;
+    }
+
+    public void setCancelledOrders(int cancelledOrders) {
+        this.cancelledOrders = cancelledOrders;
+    }
+
+    public int getTotalOrders() {
+        return totalOrders;
+    }
+
+    public void setTotalOrders(int totalOrders) {
+        this.totalOrders = totalOrders;
     }
 
     public User() {

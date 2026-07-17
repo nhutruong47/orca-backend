@@ -1,10 +1,12 @@
 package org.example.backend.service;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
+@Transactional
 public class PresenceService {
 
     // userId -> set of session IDs

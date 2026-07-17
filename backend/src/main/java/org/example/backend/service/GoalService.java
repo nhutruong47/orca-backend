@@ -5,6 +5,7 @@ import org.example.backend.dto.AiParseResult;
 import org.example.backend.entity.*;
 import org.example.backend.repository.*;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 import java.util.regex.Matcher;
@@ -15,6 +16,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 
 @Service
+@Transactional
 public class GoalService {
 
     private final GoalRepository goalRepo;

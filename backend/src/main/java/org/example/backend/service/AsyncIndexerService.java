@@ -21,6 +21,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
@@ -47,6 +48,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * retry.
  */
 @Service
+@Transactional
 public class AsyncIndexerService {
 
     private static final Logger logger = LoggerFactory.getLogger(AsyncIndexerService.class);

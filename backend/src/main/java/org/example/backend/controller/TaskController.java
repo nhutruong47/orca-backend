@@ -111,13 +111,17 @@ public class TaskController {
     @PatchMapping("/{id}/assign")
     public ResponseEntity<?> assign(@PathVariable UUID id, @RequestBody Map<String, String> body, @AuthenticationPrincipal User user) {
         accessControlService.requireTaskModifierAccess(user, id);
-        return ResponseEntity.ok(taskService.assign(id, UUID.fromString(body.get("memberId"))));
+        String memberIdStr = body.get("memberId");
+        UUID memberId = (memberIdStr == null || memberIdStr.isEmpty()) ? null : UUID.fromString(memberIdStr);
+        return ResponseEntity.ok(taskService.assign(id, memberId));
     }
 
     @PatchMapping("/{id}/backup")
     public ResponseEntity<?> setBackup(@PathVariable UUID id, @RequestBody Map<String, String> body, @AuthenticationPrincipal User user) {
         accessControlService.requireTaskModifierAccess(user, id);
-        return ResponseEntity.ok(taskService.setBackup(id, UUID.fromString(body.get("memberId"))));
+        String memberIdStr = body.get("memberId");
+        UUID memberId = (memberIdStr == null || memberIdStr.isEmpty()) ? null : UUID.fromString(memberIdStr);
+        return ResponseEntity.ok(taskService.setBackup(id, memberId));
     }
 
     @PatchMapping("/{id}/supervisor")

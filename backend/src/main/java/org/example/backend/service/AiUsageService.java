@@ -4,6 +4,7 @@ import org.example.backend.entity.User;
 import org.example.backend.repository.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
@@ -12,6 +13,7 @@ import org.springframework.web.server.ResponseStatusException;
  * AiController and AiWorkflowController.
  */
 @Service
+@Transactional
 public class AiUsageService {
 
     private static final int FREE_PLAN_LIMIT = 10;

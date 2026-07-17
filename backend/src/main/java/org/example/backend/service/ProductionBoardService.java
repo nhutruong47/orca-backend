@@ -7,6 +7,7 @@ import org.example.backend.entity.*;
 import org.example.backend.entity.Attendance.ProductionStage;
 import org.example.backend.repository.*;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -15,6 +16,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
+@Transactional
 public class ProductionBoardService {
 
     private final DailyTargetRepository targetRepo;

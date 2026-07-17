@@ -1,0 +1,5 @@
+-- ============================================================================
+-- ORCA — Production schema baseline.
+-- Cleared because it was completely out of sync with entities.
+-- Hibernate will manage schema/indexes in DEV.
+-- ============================================================================

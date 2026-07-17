@@ -12,6 +12,7 @@ import org.example.backend.repository.ProductionOrderRepository;
 import org.example.backend.repository.TeamRepository;
 import org.example.backend.repository.UserRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.LocalDate;
@@ -23,6 +24,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
+@Transactional
 public class AttendanceService {
 
     private final AttendanceRepository attendanceRepo;
