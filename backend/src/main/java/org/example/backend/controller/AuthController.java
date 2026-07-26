@@ -58,7 +58,7 @@ public class AuthController {
     }
 
     @PutMapping("/profile")
-    public ResponseEntity<?> updateProfile(@AuthenticationPrincipal User user, @RequestBody UpdateProfileRequest request) {
+    public ResponseEntity<?> updateProfile(@AuthenticationPrincipal User user, @Valid @RequestBody UpdateProfileRequest request) {
         if (user == null) {
             return ResponseEntity.status(401).body(Map.of("error", "Authentication required"));
         }
@@ -72,7 +72,7 @@ public class AuthController {
     @PutMapping("/password")
     public ResponseEntity<?> changePassword(
             @AuthenticationPrincipal User user,
-            @RequestBody ChangePasswordRequest request) {
+            @Valid @RequestBody ChangePasswordRequest request) {
         if (user == null) {
             return ResponseEntity.status(401).body(Map.of("error", "Authentication required"));
         }

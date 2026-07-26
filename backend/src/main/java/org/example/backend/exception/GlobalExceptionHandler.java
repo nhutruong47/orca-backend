@@ -105,7 +105,7 @@ public class GlobalExceptionHandler {
 
         Map<String, String> fieldErrors = new LinkedHashMap<>();
         ex.getBindingResult().getFieldErrors().forEach(fe -> {
-            System.err.println("Validation Error: " + fe.getField() + " - " + fe.getDefaultMessage());
+            log.warn("Validation error: field={}, message={}", fe.getField(), fe.getDefaultMessage());
             fieldErrors.put(fe.getField(), fe.getDefaultMessage());
         });
         body.put("fields", fieldErrors);

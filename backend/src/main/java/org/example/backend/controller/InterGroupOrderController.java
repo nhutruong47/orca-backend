@@ -115,7 +115,7 @@ public class InterGroupOrderController {
      */
     @PatchMapping("/{orderId}/confirm-delivery")
     public ResponseEntity<?> confirmDelivery(@PathVariable UUID orderId,
-                                             @RequestBody(required = false) ConfirmDeliveryRequest payload,
+                                             @Valid @RequestBody(required = false) ConfirmDeliveryRequest payload,
                                              @AuthenticationPrincipal User user) {
         accessControlService.requireInterGroupOrderAccess(user, orderId);
         String deliveryStatus = (payload != null && payload.getDeliveryStatus() != null) ? payload.getDeliveryStatus() : "ON_TIME";
@@ -127,16 +127,16 @@ public class InterGroupOrderController {
     @PostMapping("/{orderId}/buyer-confirm")
     public ResponseEntity<?> buyerConfirmDelivery(@PathVariable UUID orderId,
             @AuthenticationPrincipal User user,
-            @RequestBody ConfirmDeliveryRequest payload) {
+            @Valid @RequestBody ConfirmDeliveryRequest payload) {
         accessControlService.requireInterGroupOrderAccess(user, orderId);
         String deliveryStatus = payload.getDeliveryStatus();
         int rating = payload.getRating() != null ? payload.getRating() : 5;
         String comment = payload.getComment();
-        return ResponseEntity.ok(orderService.buyerConfirmDelivery(orderId, deliveryStatus, rating, comment, user));
+        return ResponseEntity.ok(orderService.buyerConfirmDelivery(orderId, deliveryStatus, rating, comment, payload.getProofImageUrls(), user));
     }
 
     @PostMapping("/mark-viewed")
-    public ResponseEntity<?> markViewed(@RequestBody MarkViewedRequest payload,
+    public ResponseEntity<?> markViewed(@Valid @RequestBody MarkViewedRequest payload,
                                         @AuthenticationPrincipal User user) {
         List<UUID> orderIds = payload.getOrderIds();
         String role = payload.getRole();

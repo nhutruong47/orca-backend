@@ -5,6 +5,7 @@ import org.example.backend.entity.Goal;
 import org.example.backend.entity.InterGroupOrder;
 import org.example.backend.entity.Team;
 import org.example.backend.entity.User;
+import org.example.backend.entity.enums.OrderStatus;
 import org.example.backend.repository.GoalRepository;
 import org.example.backend.repository.InterGroupOrderRepository;
 import org.example.backend.repository.TeamRepository;
@@ -27,11 +28,19 @@ public class InterGroupOrderService {
     private final ReviewRepository reviewRepo;
     private final InventoryService inventoryService;
     private final org.example.backend.repository.UserRepository userRepository;
+    private final OrderStateMachine stateMachine;
+    private final TrustScoreService trustScoreService;
+    private final org.example.backend.repository.OrderProofImageRepository orderProofImageRepo;
+    private final org.example.backend.repository.OrderEventLogRepository orderEventLogRepo;
 
     public InterGroupOrderService(InterGroupOrderRepository orderRepo, TeamRepository teamRepo,
             GoalRepository goalRepo, NotificationService notificationService,
             ReviewRepository reviewRepo, InventoryService inventoryService,
-            org.example.backend.repository.UserRepository userRepository) {
+            org.example.backend.repository.UserRepository userRepository,
+            OrderStateMachine stateMachine,
+            TrustScoreService trustScoreService,
+            org.example.backend.repository.OrderProofImageRepository orderProofImageRepo,
+            org.example.backend.repository.OrderEventLogRepository orderEventLogRepo) {
         this.orderRepo = orderRepo;
         this.teamRepo = teamRepo;
         this.goalRepo = goalRepo;
@@ -39,6 +48,59 @@ public class InterGroupOrderService {
         this.reviewRepo = reviewRepo;
         this.inventoryService = inventoryService;
         this.userRepository = userRepository;
+        this.stateMachine = stateMachine;
+        this.trustScoreService = trustScoreService;
+        this.orderProofImageRepo = orderProofImageRepo;
+        this.orderEventLogRepo = orderEventLogRepo;
+    }
+
+
+    /**
+     * Apply a status transition through {@link OrderStateMachine} so every
+     * mutation is validated against the canonical state machine.
+     *
+     * <p><b>Quick Win F1.2:</b> Replaces raw {@code order.setStatus("...")}
+     * calls scattered across the service. The previous implementation allowed
+     * any caller to write any status, which corrupted {@code OrderEventLog}
+     * history and trust-score calculations.
+     *
+     * @param order     the order being mutated
+     * @param newStatus the desired next status
+     * @param source    short debug tag identifying the calling method (logged
+     *                  with violations to speed up investigations)
+     * @throws IllegalStateException if the transition is not allowed
+     */
+    private void transitionTo(InterGroupOrder order, OrderStatus newStatus, User currentUser, String source) {
+        OrderStatus current = OrderStatus.fromLegacy(order.getStatus());
+        if (current == newStatus) {
+            return; // idempotent: no-op
+        }
+        stateMachine.requireTransition(current, newStatus);
+        
+        String oldStatusStr = order.getStatus();
+        order.setStatus(newStatus.name());
+
+        String actorRole = "SYSTEM";
+        if (currentUser != null) {
+            if (order.getBuyerTeam() != null && order.getBuyerTeam().getOwner().getId().equals(currentUser.getId())) {
+                actorRole = "BUYER";
+            } else if (order.getBuyerUser() != null && order.getBuyerUser().getId().equals(currentUser.getId())) {
+                actorRole = "BUYER";
+            } else if (order.getSellerTeam() != null && order.getSellerTeam().getOwner().getId().equals(currentUser.getId())) {
+                actorRole = "SELLER";
+            }
+        }
+
+        org.example.backend.entity.OrderEventLog log = org.example.backend.entity.OrderEventLog.builder()
+                .order(order)
+                .actorUser(currentUser)
+                .actorRole(actorRole)
+                .eventType(source)
+                .oldStatus(oldStatusStr)
+                .newStatus(newStatus.name())
+                .createdAt(LocalDateTime.now())
+                .build();
+        orderEventLogRepo.save(log);
     }
 
     public List<InterGroupOrderDTO> getOutboundOrders(UUID buyerTeamId) {
@@ -75,7 +137,7 @@ public class InterGroupOrderService {
             order.setDescription(dto.getDescription());
             order.setQuantity(dto.getQuantity());
             order.setDeadline(dto.getDeadline());
-            order.setStatus("RFQ_CREATED");
+            transitionTo(order, OrderStatus.RFQ_CREATED, currentUser, "createOrder-team");
             order.setMaterialSource(dto.getMaterialSource());
             order.setServices(dto.getServices());
             order.setProductType(dto.getProductType());
@@ -129,7 +191,7 @@ public class InterGroupOrderService {
         order.setDescription(dto.getDescription());
         order.setQuantity(dto.getQuantity());
         order.setDeadline(dto.getDeadline());
-        order.setStatus("RFQ_CREATED");
+        transitionTo(order, OrderStatus.RFQ_CREATED, currentUser, "createOrder-user");
         order.setMaterialSource(dto.getMaterialSource());
         order.setServices(dto.getServices());
         order.setProductType(dto.getProductType());
@@ -171,7 +233,7 @@ public class InterGroupOrderService {
         }
 
         // 1. Change Order Status
-        order.setStatus("CONFIRMED");
+        transitionTo(order, OrderStatus.CONFIRMED, currentUser, "acceptOrder");
         order.setBuyerViewed(false);
 
         // 2. Automatically generate a Goal in the seller's Team
@@ -218,7 +280,7 @@ public class InterGroupOrderService {
             throw new RuntimeException("Order is not in PENDING state.");
         }
 
-        order.setStatus("REJECTED");
+        transitionTo(order, OrderStatus.REJECTED, currentUser, "rejectOrder");
         order.setBuyerViewed(false);
         InterGroupOrder saved = orderRepo.save(order);
 
@@ -282,18 +344,14 @@ public class InterGroupOrderService {
         dto.setQuotedAt(order.getQuotedAt());
         dto.setUnit(order.getUnit());
 
-        // Buyer trust score — updated to include delivery performance
-        Team buyer = order.getBuyerTeam();
-        int trustScore = 100;
-        if (buyer != null && buyer.getTotalOrders() > 0) {
-            int completed = buyer.getCompletedOrders();
-            int cancelled = buyer.getCancelledOrders();
-            trustScore = (int) ((double) completed / (completed + cancelled) * 100);
-        } else if (buyer == null && order.getBuyerUser() != null && order.getBuyerUser().getTotalOrders() > 0) {
-            User buyerUser = order.getBuyerUser();
-            int completed = buyerUser.getCompletedOrders();
-            int cancelled = buyerUser.getCancelledOrders();
-            trustScore = (int) ((double) completed / (completed + cancelled) * 100);
+        // Buyer trust score — unified via TrustScoreService
+        int trustScore;
+        if (order.getBuyerTeam() != null) {
+            trustScore = trustScoreService.calculate(order.getBuyerTeam());
+        } else if (order.getBuyerUser() != null) {
+            trustScore = trustScoreService.calculate(order.getBuyerUser());
+        } else {
+            trustScore = 0;
         }
         dto.setBuyerTrustScore(trustScore);
 
@@ -339,7 +397,7 @@ public class InterGroupOrderService {
         String oldStatus = order.getStatus();
 
         // Thực hiện hủy ngay
-        order.setStatus("CANCELED");
+        transitionTo(order, OrderStatus.CANCELED, currentUser, "cancelOrder");
         order.setCancelledBy(isBuyerOwner ? "BUYER" : "SELLER");
         order.setCancelRequested(false);
         if (isBuyerOwner) {
@@ -351,17 +409,11 @@ public class InterGroupOrderService {
         // Penalty: Chỉ phạt uy tín nếu đơn hàng ĐÃ ĐƯỢC XÁC NHẬN (CONFIRMED hoặc ACCEPTED)
         if ("CONFIRMED".equals(oldStatus) || "ACCEPTED".equals(oldStatus)) {
             if (isBuyerOwner && order.getBuyerTeam() != null) {
-                Team buyer = order.getBuyerTeam();
-                buyer.setCancelledOrders(buyer.getCancelledOrders() + 1);
-                teamRepo.save(buyer);
+                trustScoreService.onOrderCancelled(order.getBuyerTeam(), null);
             } else if (isBuyerOwner && order.getBuyerUser() != null) {
-                User buyerUser = order.getBuyerUser();
-                buyerUser.setCancelledOrders(buyerUser.getCancelledOrders() + 1);
-                userRepository.save(buyerUser);
+                trustScoreService.onOrderCancelled(null, order.getBuyerUser());
             } else if (isSellerOwner) {
-                Team seller = order.getSellerTeam();
-                seller.setCancelledOrders(seller.getCancelledOrders() + 1);
-                teamRepo.save(seller);
+                trustScoreService.onOrderCancelled(order.getSellerTeam(), null);
             }
         }
 
@@ -404,22 +456,14 @@ public class InterGroupOrderService {
 
         String oldStatus = order.getStatus();
 
-        order.setStatus("CANCELED");
+        transitionTo(order, OrderStatus.CANCELED, currentUser, "approveCancel");
         order.setCancelledBy("BUYER");
         order.setCancelRequested(false);
         order.setBuyerViewed(false);
 
         // Penalty cho buyer: Chỉ phạt uy tín nếu đơn hàng ĐÃ ĐƯỢC XÁC NHẬN
         if ("CONFIRMED".equals(oldStatus) || "ACCEPTED".equals(oldStatus)) {
-            if (order.getBuyerTeam() != null) {
-                Team buyer = order.getBuyerTeam();
-                buyer.setCancelledOrders(buyer.getCancelledOrders() + 1);
-                teamRepo.save(buyer);
-            } else if (order.getBuyerUser() != null) {
-                User buyerUser = order.getBuyerUser();
-                buyerUser.setCancelledOrders(buyerUser.getCancelledOrders() + 1);
-                userRepository.save(buyerUser);
-            }
+            trustScoreService.onOrderCancelled(order.getBuyerTeam(), order.getBuyerUser());
         }
 
         InterGroupOrder saved = orderRepo.save(order);
@@ -483,7 +527,7 @@ public class InterGroupOrderService {
             throw new RuntimeException("Chỉ chủ xưởng bán mới được đánh dấu đã giao.");
         }
 
-        order.setStatus("SHIPPING");
+        transitionTo(order, OrderStatus.SHIPPING, currentUser, "shipOrder");
         order.setBuyerViewed(false);
 
         InterGroupOrder saved = orderRepo.save(order);
@@ -526,7 +570,7 @@ public class InterGroupOrderService {
             throw new RuntimeException("Chỉ chủ xưởng bán mới được đánh dấu đã giao.");
         }
 
-        order.setStatus("DELIVERED");
+        transitionTo(order, OrderStatus.DELIVERED, currentUser, "deliverOrder");
         order.setDeliveryConfirmed(false);
         order.setBuyerViewed(false);
         if (deliveryNote != null && !deliveryNote.isBlank()) {
@@ -553,94 +597,24 @@ public class InterGroupOrderService {
      */
     @Transactional
     public InterGroupOrderDTO confirmDelivery(UUID orderId, String deliveryStatus, Integer rating, String comment, User currentUser) {
-        InterGroupOrder order = orderRepo.findById(orderId)
-                .orElseThrow(() -> new RuntimeException("Order not found"));
-
-        String currentStatus = order.getStatus();
-        if (!"DELIVERED".equals(currentStatus) && !"SHIPPING".equals(currentStatus)) {
-            throw new RuntimeException("Đơn hàng chưa ở trạng thái DELIVERED để xác nhận. Hiện tại: " + currentStatus);
-        }
-
-        boolean isBuyer = (order.getBuyerTeam() != null && order.getBuyerTeam().getOwner().getId().equals(currentUser.getId()))
-                || (order.getBuyerUser() != null && order.getBuyerUser().getId().equals(currentUser.getId()));
-        if (!isBuyer) {
-            throw new RuntimeException("Chỉ bên mua mới xác nhận được giao hàng.");
-        }
-
-        if (order.getDeliveryConfirmed() != null && order.getDeliveryConfirmed()) {
-            throw new RuntimeException("Đơn này đã được xác nhận trước đó.");
-        }
-
-        String safeStatus = "ON_TIME";
-        if (deliveryStatus != null) {
-            if (!"ON_TIME".equals(deliveryStatus) && !"LATE".equals(deliveryStatus) && !"NOT_DELIVERED".equals(deliveryStatus)) {
-                throw new RuntimeException("Trạng thái giao hàng không hợp lệ.");
-            }
-            safeStatus = deliveryStatus;
-        }
-
+        String safeStatus = deliveryStatus != null ? deliveryStatus : "ON_TIME";
         int safeRating = rating == null ? 5 : rating;
-        if (safeRating < 1 || safeRating > 5) {
-            throw new RuntimeException("Đánh giá phải từ 1 đến 5 sao.");
-        }
-
-        order.setDeliveryConfirmed(true);
-        order.setDeliveryConfirmedAt(LocalDateTime.now());
-        order.setDeliveryStatus(safeStatus);
-        order.setStatus("COMPLETED");
-        order.setSellerViewed(false);
-
-        // Update seller trust stats
-        Team sellerTeam = order.getSellerTeam();
-        if ("ON_TIME".equals(safeStatus)) {
-            sellerTeam.setOnTimeOrders(sellerTeam.getOnTimeOrders() + 1);
-        } else if ("LATE".equals(safeStatus)) {
-            sellerTeam.setLateOrders(sellerTeam.getLateOrders() + 1);
-        }
-        sellerTeam.setTotalRatings(sellerTeam.getTotalRatings() + 1);
-        sellerTeam.setSumRatings(sellerTeam.getSumRatings() + safeRating);
-        sellerTeam.setCompletedOrders(sellerTeam.getCompletedOrders() + 1);
-        sellerTeam.setTotalOrders(sellerTeam.getTotalOrders() + 1);
-        teamRepo.save(sellerTeam);
-
-        Team buyer = order.getBuyerTeam();
-        if (buyer != null) {
-            buyer.setCompletedOrders(buyer.getCompletedOrders() + 1);
-            teamRepo.save(buyer);
-        } else if (order.getBuyerUser() != null) {
-            User buyerUser = order.getBuyerUser();
-            buyerUser.setCompletedOrders(buyerUser.getCompletedOrders() + 1);
-            userRepository.save(buyerUser);
-        }
-
-        org.example.backend.entity.Review review = new org.example.backend.entity.Review();
-        review.setOrder(order);
-        review.setBuyerTeam(order.getBuyerTeam());
-        review.setBuyerUser(order.getBuyerUser());
-        review.setSellerTeam(sellerTeam);
-        review.setRating(safeRating);
-        review.setComment(comment);
-        review.setDeliveryResult(safeStatus);
-        reviewRepo.save(review);
-
-        InterGroupOrder saved = orderRepo.save(order);
-
-        notifyUser(sellerTeam.getOwner(),
-                "Người mua xác nhận giao hàng",
-                "Đơn \"" + order.getTitle() + "\" đã được xác nhận: " + safeStatus + " | " + safeRating + " sao.",
-                "ORDER_COMPLETED", null);
-
-        return toDTO(saved);
+        return buyerConfirmDelivery(orderId, safeStatus, safeRating, comment, null, currentUser);
     }
 
     /**
      * Người mua xác nhận đã nhận hàng + đánh giá sao.
      * Trạng thái đơn: ON_TIME / LATE / NOT_DELIVERED
      * Trust score của xưởng được cập nhật theo đánh giá.
+     *
+     * <p><b>Bug fix (Quick Win 2):</b> Method now runs in a single transaction
+     * so that trust score updates, review persistence, and order status change
+     * are atomic. Previously the absence of {@code @Transactional} could leave
+     * the system in an inconsistent state if the call failed halfway.
      */
     @Transactional
     public InterGroupOrderDTO buyerConfirmDelivery(UUID orderId, String deliveryStatus,
-            int rating, String comment, User currentUser) {
+            int rating, String comment, java.util.List<String> proofImageUrls, User currentUser) {
         InterGroupOrder order = orderRepo.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("Order not found"));
 
@@ -663,39 +637,37 @@ public class InterGroupOrderService {
             throw new RuntimeException("Trạng thái giao hàng không hợp lệ.");
         }
 
+        if ("NOT_DELIVERED".equals(deliveryStatus)) {
+            throw new RuntimeException("Vui lòng mở Khiếu nại (Dispute) do không nhận được hàng.");
+        }
+
         if (rating < 1 || rating > 5) {
             throw new RuntimeException("Đánh giá phải từ 1 đến 5 sao.");
+        }
+
+        if (proofImageUrls != null && !proofImageUrls.isEmpty()) {
+            for (String url : proofImageUrls) {
+                org.example.backend.entity.OrderProofImage img = org.example.backend.entity.OrderProofImage.builder()
+                        .order(order)
+                        .imageUrl(url)
+                        .imageType("DELIVERY")
+                        .capturedAt(LocalDateTime.now())
+                        .uploadedByUser(currentUser)
+                        .build();
+                orderProofImageRepo.save(img);
+            }
         }
 
         // Update order delivery info
         order.setDeliveryConfirmed(true);
         order.setDeliveryConfirmedAt(LocalDateTime.now());
         order.setDeliveryStatus(deliveryStatus);
-        order.setStatus("COMPLETED");
+        transitionTo(order, OrderStatus.COMPLETED, currentUser, "buyerConfirmDelivery");
 
-        // Update seller trust stats
+        // Update seller trust stats + buyer completedOrders via TrustScoreService
         Team sellerTeam = order.getSellerTeam();
-        if ("ON_TIME".equals(deliveryStatus)) {
-            sellerTeam.setOnTimeOrders(sellerTeam.getOnTimeOrders() + 1);
-        } else if ("LATE".equals(deliveryStatus)) {
-            sellerTeam.setLateOrders(sellerTeam.getLateOrders() + 1);
-        }
-        sellerTeam.setTotalRatings(sellerTeam.getTotalRatings() + 1);
-        sellerTeam.setSumRatings(sellerTeam.getSumRatings() + rating);
-        sellerTeam.setCompletedOrders(sellerTeam.getCompletedOrders() + 1);
-        sellerTeam.setTotalOrders(sellerTeam.getTotalOrders() + 1);
-        teamRepo.save(sellerTeam);
-
-        // Update buyer team completed orders
-        Team buyer = order.getBuyerTeam();
-        if (buyer != null) {
-            buyer.setCompletedOrders(buyer.getCompletedOrders() + 1);
-            teamRepo.save(buyer);
-        } else if (order.getBuyerUser() != null) {
-            User buyerUser = order.getBuyerUser();
-            buyerUser.setCompletedOrders(buyerUser.getCompletedOrders() + 1);
-            userRepository.save(buyerUser);
-        }
+        trustScoreService.onRatingSubmitted(sellerTeam, rating, deliveryStatus);
+        trustScoreService.onOrderCompleted(sellerTeam, order.getBuyerTeam(), order.getBuyerUser());
 
         // Save review
         org.example.backend.entity.Review review = new org.example.backend.entity.Review();
@@ -762,7 +734,7 @@ public class InterGroupOrderService {
         order.setQuotedPrice(price);
         order.setQuotedNote(note);
         order.setQuotedAt(LocalDateTime.now());
-        order.setStatus("QUOTED");
+        transitionTo(order, OrderStatus.QUOTED, currentUser, "quoteOrder");
         order.setBuyerViewed(false);
         InterGroupOrder saved = orderRepo.save(order);
 
@@ -777,7 +749,10 @@ public class InterGroupOrderService {
 
     /**
      * Update order status along the new marketplace flow.
-     * Valid transitions: CONFIRMED -> IN_PRODUCTION -> QC -> COMPLETED -> SHIPPING -> DELIVERED
+     * Valid transitions are enforced by {@link OrderStateMachine}; this
+     * method becomes the single mutation point for ad-hoc status flips.
+     * <p>Quick Win F1.2: the previous implementation accepted any string,
+     * allowing callers to skip intermediate states (e.g. CONFIRMED → DELIVERED).
      */
     @Transactional
     public InterGroupOrderDTO updateOrderStatus(UUID orderId, String newStatus, User currentUser) {
@@ -788,11 +763,12 @@ public class InterGroupOrderService {
             throw new RuntimeException("Chỉ chủ xưởng mới được cập nhật trạng thái.");
         }
 
-        order.setStatus(newStatus);
+        OrderStatus target = OrderStatus.fromLegacy(newStatus);
+        transitionTo(order, target, currentUser, "updateOrderStatus");
         order.setBuyerViewed(false);
 
         // Auto deduct inventory when DELIVERED + factory-provided materials
-        if ("DELIVERED".equals(newStatus)) {
+        if (target == OrderStatus.DELIVERED) {
             order.setDeliveryConfirmed(false);
             String matSource = order.getMaterialSource();
             if (matSource == null || "FACTORY_PROVIDED".equals(matSource) || "COMBINED".equals(matSource)) {
@@ -803,6 +779,7 @@ public class InterGroupOrderService {
                                 order.getSellerTeam().getId(), productType, order.getQuantity());
                     } catch (Exception e) {
                         System.err.println("Auto inventory deduction failed: " + e.getMessage());
+                        throw new RuntimeException("Lỗi trừ kho: " + e.getMessage());
                     }
                 }
             }

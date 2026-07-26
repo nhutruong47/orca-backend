@@ -13,6 +13,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -217,22 +218,31 @@ public class TaskController {
         // Generate PayOS link
         Map<String, Object> payosResult = payosPaymentService.createSalaryPaymentLink(user, teamId.toString(), (long) totalSalary);
         
-        // Extract order code and url
+        // Extract order code and url from the PayosPaymentService response (flat: {checkoutUrl, txnRef})
         Long orderCode = null;
         String checkoutUrl = null;
-        if (payosResult != null && payosResult.get("data") instanceof Map) {
-            Map<?, ?> dataMap = (Map<?, ?>) payosResult.get("data");
-            if (dataMap.containsKey("orderCode")) {
-                Object codeObj = dataMap.get("orderCode");
-                orderCode = codeObj instanceof Number ? ((Number) codeObj).longValue() : Long.parseLong(codeObj.toString());
+        if (payosResult != null) {
+            if (payosResult.containsKey("checkoutUrl") && payosResult.get("checkoutUrl") != null) {
+                checkoutUrl = payosResult.get("checkoutUrl").toString();
             }
-            if (dataMap.containsKey("checkoutUrl")) {
-                checkoutUrl = dataMap.get("checkoutUrl").toString();
+            if (payosResult.containsKey("txnRef") && payosResult.get("txnRef") != null) {
+                String txnRefStr = payosResult.get("txnRef").toString();
+                try {
+                    orderCode = Long.parseLong(txnRefStr);
+                } catch (NumberFormatException ignored) {
+                    orderCode = null;
+                }
             }
         }
-        
+
         taskService.saveSalaryPayout(teamId, user.getId(), totalSalary, orderCode, checkoutUrl);
-        return ResponseEntity.ok(payosResult);
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("checkoutUrl", checkoutUrl);
+        response.put("txnRef", payosResult != null ? payosResult.get("txnRef") : null);
+        response.put("totalSalary", totalSalary);
+        response.put("teamId", teamId.toString());
+        return ResponseEntity.ok(response);
     }
 
     @DeleteMapping("/{id}")

@@ -5,8 +5,12 @@ import org.example.backend.entity.InventoryItem;
 import org.example.backend.entity.Team;
 import org.example.backend.repository.InventoryRepository;
 import org.example.backend.repository.TeamRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
@@ -15,6 +19,17 @@ import java.util.stream.Collectors;
 
 @Service
 public class InventoryService {
+
+    private static final Logger log = LoggerFactory.getLogger(InventoryService.class);
+
+    /**
+     * Maximum retries for optimistic-lock conflicts on inventory mutations.
+     * Each retry re-reads the row so the conflict is resolved at the cost of
+     * one extra round-trip. Set deliberately low to avoid masking real
+     * contention issues; an exception after this many retries means a real
+     * serialization problem the caller should be told about.
+     */
+    private static final int MAX_OPTIMISTIC_RETRIES = 15;
 
     private final InventoryRepository inventoryRepo;
     private final TeamRepository teamRepo;
@@ -26,6 +41,45 @@ public class InventoryService {
         this.inventoryRepo = inventoryRepo;
         this.teamRepo = teamRepo;
         this.eventPublisher = eventPublisher;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.context.annotation.Lazy
+    private InventoryService self;
+
+    /**
+     * Run a database-mutating unit of work with retry on optimistic-lock
+     * failure (<b>Quick Win F1.3</b>).
+     *
+     * <p>Two concurrent deductions on the same inventory row used to race:
+     * both read qty=10, both computed qty=8, both wrote back qty=8 — losing
+     * one deduction. With the {@code @Version} column on the entity, the
+     * second writer gets {@link OptimisticLockingFailureException} and we
+     * transparently retry by re-reading the row.
+     *
+     * <p>Each retry runs in a NEW transaction so the previous (failed) one
+     * is fully rolled back before the next attempt.
+     */
+    @Transactional(propagation = Propagation.NEVER)
+    public void runWithOptimisticRetry(Runnable action) {
+        OptimisticLockingFailureException last = null;
+        for (int attempt = 1; attempt <= MAX_OPTIMISTIC_RETRIES; attempt++) {
+            try {
+                self.runInNewTransaction(action);
+                return;
+            } catch (OptimisticLockingFailureException ex) {
+                last = ex;
+                log.warn("Optimistic lock conflict on inventory (attempt {}/{}). Retrying.",
+                        attempt, MAX_OPTIMISTIC_RETRIES);
+            }
+        }
+        log.error("Optimistic lock retries exhausted after {} attempts", MAX_OPTIMISTIC_RETRIES);
+        throw last;
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void runInNewTransaction(Runnable action) {
+        action.run();
     }
 
     // ========== READ ==========
@@ -209,10 +263,14 @@ public class InventoryService {
      * @param toState      target state (e.g. "ROASTED")
      * @param quantity     amount to transfer
      */
-    @Transactional
     public void transferStock(UUID teamId, String productType, String fromState, String toState, double quantity) {
         if (quantity <= 0) return;
+        self.runWithOptimisticRetry(() -> self.doTransferStock(teamId, productType, fromState, toState, quantity));
+    }
 
+    /** Inner transaction body — runs in {@code REQUIRES_NEW} per retry. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void doTransferStock(UUID teamId, String productType, String fromState, String toState, double quantity) {
         Team team = teamRepo.findById(teamId)
                 .orElseThrow(() -> new RuntimeException("Team not found"));
 
@@ -230,11 +288,17 @@ public class InventoryService {
 
     /**
      * Deduct from packaged stock when order is delivered.
+     * Wrapped with optimistic-lock retry so concurrent deliveries cannot
+     * silently overwrite each other.
      */
-    @Transactional
     public void deductPackagedStock(UUID teamId, String productType, double quantity) {
         if (quantity <= 0) return;
+        self.runWithOptimisticRetry(() -> self.doDeductPackagedStock(teamId, productType, quantity));
+    }
 
+    /** Inner transaction body — runs in {@code REQUIRES_NEW} per retry. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void doDeductPackagedStock(UUID teamId, String productType, double quantity) {
         InventoryItem item = inventoryRepo.findByTeamIdAndProductTypeAndProductState(teamId, productType, "PACKAGED")
                 .orElse(null);
         if (item != null) {

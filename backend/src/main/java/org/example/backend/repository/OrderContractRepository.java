@@ -1,0 +1,13 @@
+package org.example.backend.repository;
+
+import org.example.backend.entity.OrderContract;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.Optional;
+import java.util.UUID;
+
+@Repository
+public interface OrderContractRepository extends JpaRepository<OrderContract, UUID> {
+    Optional<OrderContract> findByOrderId(UUID orderId);
+}
