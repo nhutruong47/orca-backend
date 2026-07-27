@@ -3,6 +3,8 @@ package org.example.backend.controller;
 import jakarta.servlet.http.HttpServletRequest;
 import org.example.backend.entity.User;
 import org.example.backend.service.VnpayPaymentService;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -17,14 +19,26 @@ import org.springframework.web.bind.annotation.RestController;
 import java.net.URI;
 import java.util.Map;
 
+/**
+ * Payment endpoints.
+ *
+ * <p>Mock-transfer and virtual-QR endpoints are only registered when the
+ * application runs outside the {@code production} profile. Those endpoints
+ * allow self-approval of payments and would be a direct revenue bypass if
+ * left enabled in production.
+ */
 @RestController
 @RequestMapping("/api/payments")
 public class PaymentController {
 
     private final VnpayPaymentService vnpayPaymentService;
+    private final boolean mockEndpointsEnabled;
 
-    public PaymentController(VnpayPaymentService vnpayPaymentService) {
+    public PaymentController(
+            VnpayPaymentService vnpayPaymentService,
+            @Value("${app.payment.mock-endpoints-enabled:#{environment.getProperty('spring.profiles.active','default').equals('production') ? false : true}}") boolean mockEndpointsEnabled) {
         this.vnpayPaymentService = vnpayPaymentService;
+        this.mockEndpointsEnabled = mockEndpointsEnabled;
     }
 
     @GetMapping("/plans")
@@ -52,6 +66,10 @@ public class PaymentController {
     public ResponseEntity<?> createMockTransfer(
             @AuthenticationPrincipal User user,
             @RequestBody Map<String, String> body) {
+        if (!mockEndpointsEnabled) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", "Mock payment endpoint is disabled in this environment."));
+        }
         if (user == null) {
             return ResponseEntity.status(401).body(Map.of("error", "Authentication required"));
         }

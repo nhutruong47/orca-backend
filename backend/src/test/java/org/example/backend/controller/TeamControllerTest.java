@@ -3,6 +3,7 @@ package org.example.backend.controller;
 import org.example.backend.dto.TeamDTO;
 import org.example.backend.entity.User;
 import org.example.backend.service.AccessControlService;
+import org.example.backend.service.TeamJoinService;
 import org.example.backend.service.TeamService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,6 +25,7 @@ import static org.mockito.Mockito.when;
 public class TeamControllerTest {
 
     private TeamService teamService;
+    private TeamJoinService teamJoinService;
     private AccessControlService accessControlService;
     private TeamController teamController;
     private Authentication auth;
@@ -32,8 +34,9 @@ public class TeamControllerTest {
     @BeforeEach
     void setUp() {
         teamService = mock(TeamService.class);
+        teamJoinService = mock(TeamJoinService.class);
         accessControlService = mock(AccessControlService.class);
-        teamController = new TeamController(teamService, accessControlService);
+        teamController = new TeamController(teamService, teamJoinService, accessControlService);
         
         testUser = new User();
         testUser.setId(UUID.randomUUID());

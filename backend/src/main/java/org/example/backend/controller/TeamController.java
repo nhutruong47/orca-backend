@@ -4,11 +4,14 @@ import org.example.backend.dto.TeamDTO;
 import org.example.backend.entity.User;
 import org.example.backend.service.AccessControlService;
 import org.example.backend.service.TeamService;
+import org.example.backend.service.TeamJoinService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import lombok.RequiredArgsConstructor;
 
+import java.security.Principal;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -16,15 +19,12 @@ import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/teams")
+@RequiredArgsConstructor
 public class TeamController {
 
     private final TeamService teamService;
+    private final TeamJoinService teamJoinService;
     private final AccessControlService accessControlService;
-
-    public TeamController(TeamService teamService, AccessControlService accessControlService) {
-        this.teamService = teamService;
-        this.accessControlService = accessControlService;
-    }
 
     @GetMapping
     public ResponseEntity<?> getMyTeams(Authentication auth) {
@@ -53,13 +53,12 @@ public class TeamController {
     }
 
     @PostMapping("/join")
-    public ResponseEntity<?> joinByCode(@RequestBody Map<String, String> body, Authentication auth) {
+    public ResponseEntity<?> joinByCode(@RequestBody Map<String, String> body, Principal principal) {
         String code = body.get("inviteCode");
         if (code == null || code.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "Mã mời không được để trống"));
         }
-        TeamDTO team = teamService.joinByCode(code, auth.getName());
-        return ResponseEntity.ok(team);
+        return ResponseEntity.ok(teamJoinService.joinByCode(code, principal.getName()));
     }
 
     @PostMapping("/{id}/members")

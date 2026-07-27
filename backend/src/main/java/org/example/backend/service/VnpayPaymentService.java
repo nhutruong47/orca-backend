@@ -461,7 +461,7 @@ public class VnpayPaymentService {
 
     private String normalizePaymentMethod(String method) {
         String normalized = method == null ? "VNPAY" : method.trim().toUpperCase(Locale.ROOT);
-        if (!List.of("MB_BANK", "VNPAY").contains(normalized)) {
+        if (!List.of("MB_BANK", "VNPAY", "PAYOS").contains(normalized)) {
             throw new RuntimeException("Phuong thuc thanh toan khong hop le");
         }
         return normalized;

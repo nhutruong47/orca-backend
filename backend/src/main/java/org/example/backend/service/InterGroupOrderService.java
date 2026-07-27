@@ -3,6 +3,10 @@ package org.example.backend.service;
 import org.example.backend.dto.InterGroupOrderDTO;
 import org.example.backend.entity.Goal;
 import org.example.backend.entity.InterGroupOrder;
+import org.example.backend.dto.OrderEventLogDTO;
+import org.example.backend.dto.DeliverOrderRequest;
+import org.example.backend.dto.DeliveryProofImageDTO;
+import org.example.backend.entity.OrderProofImage;
 import org.example.backend.entity.Team;
 import org.example.backend.entity.User;
 import org.example.backend.entity.enums.OrderStatus;
@@ -263,6 +267,58 @@ public class InterGroupOrderService {
                     "Đơn hàng \"" + order.getTitle() + "\" đã được " + sellerTeam.getName() + " chấp nhận và bắt đầu gia công.",
                     "ORDER_ACCEPTED", null);
         }
+
+        return toDTO(saved);
+    }
+
+    @Transactional
+    public InterGroupOrderDTO confirmQuote(UUID orderId, User currentUser) {
+        InterGroupOrder order = orderRepo.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found"));
+
+        if (!"QUOTED".equals(order.getStatus())) {
+            throw new RuntimeException("Đơn hàng không ở trạng thái Đã Báo Giá.");
+        }
+
+        Team buyerTeam = order.getBuyerTeam();
+        User buyerUser = order.getBuyerUser();
+
+        boolean isBuyerOwner = buyerTeam != null && buyerTeam.getOwner().getId().equals(currentUser.getId());
+        boolean isBuyerDirect = buyerUser != null && buyerUser.getId().equals(currentUser.getId());
+
+        if (!isBuyerOwner && !isBuyerDirect) {
+            throw new RuntimeException("Chỉ người mua mới có thể chốt đơn báo giá.");
+        }
+
+        // 1. Change Order Status
+        transitionTo(order, OrderStatus.CONFIRMED, currentUser, "confirmQuote");
+        order.setSellerViewed(false);
+
+        // 2. Automatically generate a Goal in the seller's Team
+        Team sellerTeam = order.getSellerTeam();
+        Goal autoGoal = new Goal();
+        autoGoal.setTeam(sellerTeam);
+        autoGoal.setOwner(sellerTeam.getOwner()); // Owner is the seller
+        autoGoal.setTitle("[Đơn Hàng] " + order.getTitle());
+        autoGoal.setOutputTarget("SL: " + order.getQuantity() + " | " + order.getDescription());
+        autoGoal.setPriority(2); // Normal priority
+        autoGoal.setDeadline(order.getDeadline());
+        autoGoal.setStatus("PUBLISHED");
+        autoGoal.setTotalTasks(0);
+        autoGoal.setCompletedTasks(0);
+
+        Goal savedGoal = goalRepo.save(autoGoal);
+
+        // 3. Link the goal to the order
+        order.setLinkedGoalId(savedGoal.getId());
+
+        InterGroupOrder saved = orderRepo.save(order);
+
+        // Notify seller that order was confirmed
+        notifyUser(sellerTeam.getOwner(),
+                "Khách hàng đã chốt báo giá",
+                "Khách hàng đã đồng ý với báo giá cho đơn hàng: " + order.getTitle(),
+                "ORDER_ACCEPTED", order.getId());
 
         return toDTO(saved);
     }
@@ -551,7 +607,7 @@ public class InterGroupOrderService {
      * Only the seller (receiving team owner) can call this.
      */
     @Transactional
-    public InterGroupOrderDTO deliverOrder(UUID orderId, String deliveryNote, User currentUser) {
+    public InterGroupOrderDTO deliverOrder(UUID orderId, String deliveryNote, User currentUser, DeliverOrderRequest payload) {
         InterGroupOrder order = orderRepo.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("Order not found"));
 
@@ -579,6 +635,21 @@ public class InterGroupOrderService {
 
         InterGroupOrder saved = orderRepo.save(order);
 
+        // Persist proof images with GPS metadata (if provided)
+        if (payload != null && payload.getProofImages() != null && !payload.getProofImages().isEmpty()) {
+            for (DeliveryProofImageDTO dto : payload.getProofImages()) {
+                OrderProofImage proof = new OrderProofImage();
+                proof.setOrder(saved);
+                proof.setImageUrl(dto.getImageUrl());
+                proof.setLatitude(dto.getLatitude());
+                proof.setLongitude(dto.getLongitude());
+                proof.setCapturedAt(dto.getCapturedAt() != null ? dto.getCapturedAt() : LocalDateTime.now());
+                proof.setUploadedByUser(currentUser);
+                proof.setImageType(dto.getImageType() != null ? dto.getImageType() : "DELIVERY");
+                orderProofImageRepo.save(proof);
+            }
+        }
+
         User buyerToNotify = resolveBuyerUser(order);
         if (buyerToNotify != null) {
             notifyUser(buyerToNotify,
@@ -598,7 +669,10 @@ public class InterGroupOrderService {
     @Transactional
     public InterGroupOrderDTO confirmDelivery(UUID orderId, String deliveryStatus, Integer rating, String comment, User currentUser) {
         String safeStatus = deliveryStatus != null ? deliveryStatus : "ON_TIME";
-        int safeRating = rating == null ? 5 : rating;
+        Integer safeRating = (rating != null && rating >= 1 && rating <= 5) ? rating : null;
+        if (safeRating == null) {
+            throw new IllegalArgumentException("Rating is required and must be between 1 and 5");
+        }
         return buyerConfirmDelivery(orderId, safeStatus, safeRating, comment, null, currentUser);
     }
 
@@ -823,5 +897,23 @@ public class InterGroupOrderService {
             // Don't let notification failures break order operations
             System.err.println("Failed to send notification: " + e.getMessage());
         }
+    }
+
+    public List<OrderEventLogDTO> getEventLogs(UUID orderId) {
+        List<org.example.backend.entity.OrderEventLog> logs = orderEventLogRepo.findByOrderIdOrderByCreatedAtDesc(orderId);
+        return logs.stream().map(log -> {
+            OrderEventLogDTO dto = new OrderEventLogDTO();
+            dto.setId(log.getId());
+            dto.setOrderId(log.getOrder().getId());
+            dto.setActorName(log.getActorUser() != null ? log.getActorUser().getFullName() : "Hệ thống");
+            dto.setActorRole(log.getActorRole());
+            dto.setEventType(log.getEventType());
+            dto.setOldStatus(log.getOldStatus());
+            dto.setNewStatus(log.getNewStatus());
+            dto.setNote(log.getNote());
+            dto.setMetadata(log.getMetadata());
+            dto.setCreatedAt(log.getCreatedAt());
+            return dto;
+        }).collect(Collectors.toList());
     }
 }

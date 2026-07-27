@@ -3,6 +3,9 @@ package org.example.backend.security;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
+import jakarta.annotation.PostConstruct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
@@ -16,11 +19,30 @@ import java.util.function.Function;
 @Component
 public class JwtUtil {
 
+    private static final Logger log = LoggerFactory.getLogger(JwtUtil.class);
+
+    private static final String DEFAULT_SECRET_MARKER = "CHANGE_ME_in_production";
+
     @Value("${app.jwt.secret}")
     private String secret;
 
     @Value("${app.jwt.expiration}")
     private long expiration;
+
+    @PostConstruct
+    void warnIfDefaultSecret() {
+        if (secret == null || secret.startsWith(DEFAULT_SECRET_MARKER)) {
+            log.warn("=========================================================");
+            log.warn(" JWT secret is using the placeholder default value.");
+            log.warn(" This is INSECURE for production. Set the JWT_SECRET");
+            log.warn(" environment variable to a real 256-bit random secret.");
+            log.warn("=========================================================");
+        }
+        if (secret == null) {
+            throw new IllegalStateException(
+                    "app.jwt.secret is not configured. Set JWT_SECRET environment variable.");
+        }
+    }
 
     /**
      * Tạo JWT token cho user

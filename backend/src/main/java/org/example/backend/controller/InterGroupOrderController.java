@@ -1,6 +1,7 @@
 package org.example.backend.controller;
 
 import org.example.backend.dto.InterGroupOrderDTO;
+import org.example.backend.dto.OrderEventLogDTO;
 import org.example.backend.entity.User;
 import org.example.backend.service.AccessControlService;
 import org.example.backend.service.InterGroupOrderService;
@@ -10,6 +11,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import org.example.backend.dto.ConfirmDeliveryRequest;
+import org.example.backend.dto.DeliverOrderRequest;
 import org.example.backend.dto.MarkViewedRequest;
 
 import jakarta.validation.Valid;
@@ -63,6 +65,20 @@ public class InterGroupOrderController {
         return ResponseEntity.ok(orderService.acceptOrder(orderId, user));
     }
 
+    @PostMapping("/{orderId}/quote")
+    public ResponseEntity<?> quoteOrder(@PathVariable UUID orderId, @RequestBody Map<String, Object> payload, @AuthenticationPrincipal User user) {
+        accessControlService.requireInterGroupOrderAccess(user, orderId);
+        Double price = payload.containsKey("price") && payload.get("price") != null ? Double.valueOf(payload.get("price").toString()) : null;
+        String note = (String) payload.get("note");
+        return ResponseEntity.ok(orderService.quoteOrder(orderId, price, note, user));
+    }
+
+    @PostMapping("/{orderId}/confirm-quote")
+    public ResponseEntity<?> confirmQuote(@PathVariable UUID orderId, @AuthenticationPrincipal User user) {
+        accessControlService.requireInterGroupOrderAccess(user, orderId);
+        return ResponseEntity.ok(orderService.confirmQuote(orderId, user));
+    }
+
     @PostMapping("/{orderId}/reject")
     public ResponseEntity<?> rejectOrder(@PathVariable UUID orderId, @AuthenticationPrincipal User user) {
         accessControlService.requireInterGroupOrderAccess(user, orderId);
@@ -102,11 +118,11 @@ public class InterGroupOrderController {
      */
     @PatchMapping("/{orderId}/deliver")
     public ResponseEntity<?> deliverOrder(@PathVariable UUID orderId,
-                                          @RequestBody(required = false) ConfirmDeliveryRequest payload,
+                                          @Valid @RequestBody(required = false) DeliverOrderRequest payload,
                                           @AuthenticationPrincipal User user) {
         accessControlService.requireInterGroupOrderAccess(user, orderId);
         String deliveryNote = payload != null ? payload.getDeliveryNote() : null;
-        return ResponseEntity.ok(orderService.deliverOrder(orderId, deliveryNote, user));
+        return ResponseEntity.ok(orderService.deliverOrder(orderId, deliveryNote, user, payload));
     }
 
     /**
@@ -119,7 +135,7 @@ public class InterGroupOrderController {
                                              @AuthenticationPrincipal User user) {
         accessControlService.requireInterGroupOrderAccess(user, orderId);
         String deliveryStatus = (payload != null && payload.getDeliveryStatus() != null) ? payload.getDeliveryStatus() : "ON_TIME";
-        Integer rating = (payload != null && payload.getRating() != null) ? payload.getRating() : 5;
+        Integer rating = (payload != null) ? payload.getRating() : null;
         String comment = payload != null ? payload.getComment() : null;
         return ResponseEntity.ok(orderService.confirmDelivery(orderId, deliveryStatus, rating, comment, user));
     }
@@ -130,7 +146,7 @@ public class InterGroupOrderController {
             @Valid @RequestBody ConfirmDeliveryRequest payload) {
         accessControlService.requireInterGroupOrderAccess(user, orderId);
         String deliveryStatus = payload.getDeliveryStatus();
-        int rating = payload.getRating() != null ? payload.getRating() : 5;
+        int rating = payload.getRating();
         String comment = payload.getComment();
         return ResponseEntity.ok(orderService.buyerConfirmDelivery(orderId, deliveryStatus, rating, comment, payload.getProofImageUrls(), user));
     }
@@ -146,5 +162,10 @@ public class InterGroupOrderController {
         }
         orderService.markOrdersAsViewed(orderIds, role);
         return ResponseEntity.ok(Map.of("message", "Success"));
+    }
+
+    @GetMapping("/{id}/event-logs")
+    public ResponseEntity<List<OrderEventLogDTO>> getEventLogs(@PathVariable UUID id) {
+        return ResponseEntity.ok(orderService.getEventLogs(id));
     }
 }

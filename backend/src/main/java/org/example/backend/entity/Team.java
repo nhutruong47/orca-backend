@@ -33,6 +33,9 @@ public class Team {
     @Column(name = "is_published", nullable = false)
     private boolean isPublished = false;
 
+    @Column(name = "is_verified", nullable = false, columnDefinition = "boolean default false")
+    private boolean isVerified = false;
+
     private String specialty;
     private String capacity;
     private String region;
@@ -201,8 +204,16 @@ public class Team {
         return isPublished;
     }
 
-    public void setPublished(boolean isPublished) {
-        this.isPublished = isPublished;
+    public void setPublished(boolean published) {
+        isPublished = published;
+    }
+
+    public boolean isVerified() {
+        return isVerified;
+    }
+
+    public void setVerified(boolean verified) {
+        isVerified = verified;
     }
 
     public String getSpecialty() {

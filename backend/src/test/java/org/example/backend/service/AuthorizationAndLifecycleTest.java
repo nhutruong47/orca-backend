@@ -134,7 +134,7 @@ public class AuthorizationAndLifecycleTest {
 
         // 3. Seller delivers -> DELIVERED
         InterGroupOrderDTO delivered = interGroupOrderService.deliverOrder(
-                UUID.fromString(created.getId()), "Giao tai kho", seller);
+                UUID.fromString(created.getId()), "Giao tai kho", seller, null);
         assertEquals("DELIVERED", delivered.getStatus());
         assertFalse(Boolean.TRUE.equals(delivered.getDeliveryConfirmed()));
 
@@ -164,7 +164,7 @@ public class AuthorizationAndLifecycleTest {
 
         // Buyer is not the seller
         assertThrows(RuntimeException.class,
-                () -> interGroupOrderService.deliverOrder(saved.getId(), null, buyer));
+                () -> interGroupOrderService.deliverOrder(saved.getId(), null, buyer, null));
     }
 
     @Test
@@ -192,7 +192,7 @@ public class AuthorizationAndLifecycleTest {
         InterGroupOrder saved = orderRepo.save(order);
 
         assertThrows(RuntimeException.class,
-                () -> interGroupOrderService.deliverOrder(saved.getId(), null, seller));
+                () -> interGroupOrderService.deliverOrder(saved.getId(), null, seller, null));
     }
 
     @Test
