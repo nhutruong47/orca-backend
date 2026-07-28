@@ -5,3 +5,4 @@ python-dotenv==1.0.1
 httpx==0.28.1
 google-auth==2.40.3
 requests==2.32.4
+numpy==1.26.4
