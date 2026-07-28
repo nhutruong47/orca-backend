@@ -977,14 +977,15 @@ def _generate_json_object_with_gemini_api(prompt: str, max_output_tokens: int, e
             }
         ],
         "generationConfig": {
-            "temperature": 0.1,
-            "topP": 0.8,
             "maxOutputTokens": max_output_tokens,
             "responseMimeType": "application/json",
         },
     }
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{settings.gemini_model}:generateContent"
+    url = (
+        "https://generativelanguage.googleapis.com/v1beta/models/"
+        f"{_clean_env_value(settings.gemini_model)}:generateContent"
+    )
     max_retries = 5
     for attempt in range(max_retries):
         try:
@@ -1026,8 +1027,6 @@ def _generate_json_object_with_vertex_ai(prompt: str, max_output_tokens: int, er
             }
         ],
         "generationConfig": {
-            "temperature": 0.1,
-            "topP": 0.8,
             "maxOutputTokens": max_output_tokens,
             "responseMimeType": "application/json",
         },
