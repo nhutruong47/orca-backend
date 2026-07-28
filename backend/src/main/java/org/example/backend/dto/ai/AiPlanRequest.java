@@ -7,6 +7,7 @@ import java.util.Map;
 
 public class AiPlanRequest {
     private String teamId;
+    private String text;
     private String intent;
     private Map<String, Object> fields = new HashMap<>();
     private List<AiTeamMemberContext> members = new ArrayList<>();
@@ -17,6 +18,14 @@ public class AiPlanRequest {
 
     public void setTeamId(String teamId) {
         this.teamId = teamId;
+    }
+
+    public String getText() {
+        return text;
+    }
+
+    public void setText(String text) {
+        this.text = text;
     }
 
     public String getIntent() {

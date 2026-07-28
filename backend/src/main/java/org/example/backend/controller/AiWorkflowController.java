@@ -87,11 +87,13 @@ public class AiWorkflowController {
             }
             String sourceQuery = fieldsMap != null && fieldsMap.get("text") instanceof String s
                     ? s
-                    : (fieldsMap != null && fieldsMap.get("query") instanceof String s2 ? s2 : "");
-            AiPlan persisted = aiPlanService.generatePlan(
+                    : (fieldsMap != null && fieldsMap.get("query") instanceof String s2
+                    ? s2
+                    : (request.getText() == null ? "" : request.getText()));
+            AiPlan persisted = aiPlanService.saveStructuredDraft(
                     teamId, user, sourceQuery,
                     request.getIntent() == null ? "UNKNOWN" : request.getIntent(),
-                    fieldsMap == null ? Map.of() : fieldsMap);
+                    draft);
             Map<String, Object> out = new LinkedHashMap<>();
             out.put("draft", draft);
             out.put("planId", persisted.getId().toString());

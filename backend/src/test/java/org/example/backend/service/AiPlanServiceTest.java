@@ -1,6 +1,8 @@
 package org.example.backend.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.example.backend.dto.ai.AiPlanDraftResponse;
+import org.example.backend.dto.ai.AiTaskDraft;
 import org.example.backend.entity.AiPlan;
 import org.example.backend.entity.Role;
 import org.example.backend.entity.Team;
@@ -17,6 +19,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestTemplate;
 
 import java.lang.reflect.Field;
 import java.util.Optional;
@@ -29,6 +34,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 
 /**
  * Unit tests for {@link AiPlanService}.
@@ -181,6 +188,38 @@ class AiPlanServiceTest {
     }
 
     @Test
+    @DisplayName("saveStructuredDraft() persists the already returned AI draft without another AI call")
+    void saveStructuredDraftPersistsReturnedDraft() {
+        AiPlanDraftResponse draft = new AiPlanDraftResponse();
+        draft.setGoalTitle("Rang 10kg Arabica");
+        draft.setOutputTarget("10kg Arabica");
+        draft.setDeadline("2026-07-28T17:00:00");
+        draft.setPriority(5);
+
+        AiTaskDraft task = new AiTaskDraft();
+        task.setTitle("Rang me Arabica");
+        task.setDescription("Thuc hien rang theo profile da chot.");
+        task.setPriority(5);
+        task.setWorkload(2.0);
+        draft.setTasks(java.util.List.of(task));
+
+        when(teamRepo.findById(team.getId())).thenReturn(Optional.of(team));
+        when(planRepo.save(any(AiPlan.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        AiPlan saved = service.saveStructuredDraft(
+                team.getId(), owner, "rang 10kg arabica", "PRODUCTION_PLAN", draft);
+
+        assertThat(saved.getSourceQuery()).isEqualTo("rang 10kg arabica");
+        assertThat(saved.getGoalTitle()).isEqualTo("Rang 10kg Arabica");
+        assertThat(saved.getOutputTarget()).isEqualTo("10kg Arabica");
+        assertThat(saved.getDeadline()).isEqualTo(java.time.LocalDateTime.parse("2026-07-28T17:00:00"));
+        assertThat(saved.getPriority()).isEqualTo(5);
+        assertThat(saved.getTasksJson()).contains("Rang me Arabica");
+        verify(accessControlService).requireTeamMember(owner, team.getId());
+        verify(planRepo).save(any(AiPlan.class));
+    }
+
+    @Test
     @DisplayName("revise() rejects PROMOTED/REJECTED plans (terminal states)")
     void reviseRejectsTerminalStates() {
         AiPlan promoted = persistedPlan("PROMOTED");
@@ -194,6 +233,29 @@ class AiPlanServiceTest {
         assertThatThrownBy(() -> service.revise(rejected.getId(), owner, "add more tasks"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Cannot revise");
+    }
+
+    @Test
+    @DisplayName("revise() does not mark REVISED when the AI service fails")
+    void reviseDoesNotPersistWhenAiFails() {
+        AiPlan plan = persistedPlan("DRAFT");
+        plan.setGoalTitle("Draft");
+        plan.setOutputTarget("Output");
+        plan.setPriority(3);
+        plan.setTasksJson("[]");
+
+        when(planRepo.findById(plan.getId())).thenReturn(Optional.of(plan));
+        ReflectionTestUtils.setField(service, "aiServiceBaseUrl", "http://ai.test");
+        RestTemplate restTemplate = (RestTemplate) ReflectionTestUtils.getField(service, "restTemplate");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        server.expect(requestTo("http://ai.test/revise")).andRespond(withServerError());
+
+        assertThatThrownBy(() -> service.revise(plan.getId(), owner, "them qc"))
+                .isInstanceOf(RestClientException.class);
+
+        assertThat(plan.getStatus()).isEqualTo("DRAFT");
+        verify(planRepo, never()).save(any(AiPlan.class));
+        server.verify();
     }
 
     @Test

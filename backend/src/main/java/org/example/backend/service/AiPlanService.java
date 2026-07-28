@@ -3,6 +3,7 @@ package org.example.backend.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import org.example.backend.dto.ai.AiPlanDraftResponse;
 import org.example.backend.dto.ai.StandardizedAiResponseDTO;
 import org.example.backend.entity.AiPlan;
 import org.example.backend.entity.Team;
@@ -157,6 +158,29 @@ public class AiPlanService {
         return planRepo.save(plan);
     }
 
+    public AiPlan saveStructuredDraft(UUID teamId, User user, String query, String intent, AiPlanDraftResponse draft) {
+        accessControlService.requireTeamMember(user, teamId);
+        Team team = teamRepo.findById(teamId)
+                .orElseThrow(() -> new IllegalArgumentException("Team not found: " + teamId));
+        if (draft == null) {
+            throw new IllegalArgumentException("AI draft is required");
+        }
+
+        AiPlan plan = new AiPlan();
+        plan.setTeam(team);
+        plan.setOwner(user);
+        plan.setSourceQuery(query);
+        plan.setIntent(intent);
+        plan.setStatus("DRAFT");
+        plan.setGoalTitle(stringOrNull(draft.getGoalTitle(), "Káº¿ hoáº¡ch AI"));
+        plan.setOutputTarget(stringOrNull(draft.getOutputTarget(), null));
+        plan.setPriority(intOr(draft.getPriority(), 3));
+        plan.setDeadline(parseDeadline(draft.getDeadline()));
+        plan.setTasksJson(toJson(draft.getTasks()));
+
+        return planRepo.save(plan);
+    }
+
     // ------------------------------------------------------------------
     // Status transitions
     // ------------------------------------------------------------------
@@ -215,24 +239,23 @@ public class AiPlanService {
         draft.put("tasks", parseJson(plan.getTasksJson()));
         body.put("draft", draft);
 
-        try {
-            Map<String, Object> revised = callAi("/revise", body, Map.class);
-            if (revised != null) {
-                if (revised.get("goalTitle") != null) {
-                    plan.setGoalTitle(revised.get("goalTitle").toString());
-                }
-                if (revised.get("outputTarget") != null) {
-                    plan.setOutputTarget(revised.get("outputTarget").toString());
-                }
-                if (revised.get("tasks") != null) {
-                    plan.setTasksJson(toJson(revised.get("tasks")));
-                }
-                if (revised.get("priority") instanceof Number n) {
-                    plan.setPriority(n.intValue());
-                }
+        Map<String, Object> revised = callAi("/revise", body, Map.class);
+        if (revised != null) {
+            if (revised.get("goalTitle") != null) {
+                plan.setGoalTitle(revised.get("goalTitle").toString());
             }
-        } catch (Exception exc) {
-            logger.warn("AI /revise failed, keeping the current plan untouched: {}", exc.getMessage());
+            if (revised.get("outputTarget") != null) {
+                plan.setOutputTarget(revised.get("outputTarget").toString());
+            }
+            if (revised.containsKey("deadline")) {
+                plan.setDeadline(parseDeadline(stringOrNull(revised.get("deadline"), null)));
+            }
+            if (revised.get("tasks") != null) {
+                plan.setTasksJson(toJson(revised.get("tasks")));
+            }
+            if (revised.get("priority") instanceof Number n) {
+                plan.setPriority(n.intValue());
+            }
         }
         plan.setStatus("REVISED");
         return planRepo.save(plan);
@@ -344,6 +367,16 @@ public class AiPlanService {
     private static String truncate(String text, int n) {
         if (text == null) return null;
         return text.length() <= n ? text : text.substring(0, n - 1) + "…";
+    }
+
+    private static LocalDateTime parseDeadline(String deadline) {
+        if (deadline == null || deadline.isBlank()) return null;
+        try {
+            return LocalDateTime.parse(deadline);
+        } catch (Exception exc) {
+            logger.warn("Failed to parse AI deadline '{}': {}", deadline, exc.getMessage());
+            return null;
+        }
     }
 
     private static String stringOrNull(Object value, String fallback) {
