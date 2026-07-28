@@ -53,7 +53,7 @@ For Gemini mode, create `.env` in this folder:
 AI_V2_MODE=gemini
 AI_PROVIDER=gemini_api
 GEMINI_API_KEY=your_new_key
-GEMINI_MODEL=gemini-1.5-flash
+GEMINI_MODEL=gemini-2.5-flash
 GEMINI_TIMEOUT_SECONDS=30
 ```
 
@@ -64,7 +64,7 @@ AI_V2_MODE=gemini
 AI_PROVIDER=vertex
 VERTEX_PROJECT_ID=your-google-cloud-project-id
 VERTEX_LOCATION=global
-VERTEX_MODEL=gemini-3.5-flash
+VERTEX_MODEL=gemini-2.5-flash
 GEMINI_TIMEOUT_SECONDS=90
 GOOGLE_APPLICATION_CREDENTIALS=F:\path\to\service-account.json
 ```
