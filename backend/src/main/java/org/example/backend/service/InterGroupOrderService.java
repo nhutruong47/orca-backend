@@ -182,7 +182,7 @@ public class InterGroupOrderService {
 
         // Trust check: block if trust score < 30% and has >= 3 orders
         if (buyerTeam.getTotalOrders() >= 3) {
-            int trustScore = (int) ((double) buyerTeam.getCompletedOrders() / buyerTeam.getTotalOrders() * 100);
+            int trustScore = trustScoreService.calculate(buyerTeam);
             if (trustScore < 30) {
                 throw new RuntimeException("Uy tín quá thấp (" + trustScore + "%). Không thể đặt hàng.");
             }
@@ -407,7 +407,7 @@ public class InterGroupOrderService {
         } else if (order.getBuyerUser() != null) {
             trustScore = trustScoreService.calculate(order.getBuyerUser());
         } else {
-            trustScore = 0;
+            trustScore = -1;
         }
         dto.setBuyerTrustScore(trustScore);
 
@@ -812,12 +812,132 @@ public class InterGroupOrderService {
         order.setBuyerViewed(false);
         InterGroupOrder saved = orderRepo.save(order);
 
+        return toDTO(saved);
+    }
+
+    @Transactional
+    public InterGroupOrderDTO requoteOrder(UUID orderId, Double price, String note, User currentUser) {
+        InterGroupOrder order = orderRepo.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found"));
+        if (!order.getSellerTeam().getOwner().getId().equals(currentUser.getId())) {
+            throw new RuntimeException("Chỉ chủ xưởng mới được báo giá lại.");
+        }
+        if (!"QUOTED".equals(order.getStatus()) && !"REJECTED".equals(order.getStatus()) && !"REQUOTED".equals(order.getStatus())) {
+            throw new RuntimeException("Đơn hàng không ở trạng thái có thể báo giá lại.");
+        }
+        order.setQuotedPrice(price);
+        order.setQuotedNote(note);
+        order.setQuotedAt(LocalDateTime.now());
+        transitionTo(order, OrderStatus.REQUOTED, currentUser, "requoteOrder");
+        order.setBuyerViewed(false);
+        InterGroupOrder saved = orderRepo.save(order);
+
         User buyerToNotify = resolveBuyerUser(order);
         if (buyerToNotify != null) {
-            notifyUser(buyerToNotify, "Đã nhận báo giá",
-                    "Xưởng " + order.getSellerTeam().getName() + " đã báo giá cho đơn \"" + order.getTitle() + "\".",
-                    "ORDER_QUOTED", null);
+            notifyUser(buyerToNotify, "Báo giá lại",
+                    "Xưởng " + order.getSellerTeam().getName() + " đã cập nhật báo giá cho đơn \"" + order.getTitle() + "\".",
+                    "ORDER_REQUOTED", null);
         }
+        return toDTO(saved);
+    }
+
+    @Transactional
+    public InterGroupOrderDTO buyerAcceptRequote(UUID orderId, User currentUser) {
+        InterGroupOrder order = orderRepo.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found"));
+
+        Team buyerTeam = order.getBuyerTeam();
+        User buyerUser = order.getBuyerUser();
+
+        boolean isBuyerOwner = buyerTeam != null && buyerTeam.getOwner().getId().equals(currentUser.getId());
+        boolean isBuyerDirect = buyerUser != null && buyerUser.getId().equals(currentUser.getId());
+
+        if (!isBuyerOwner && !isBuyerDirect) {
+            throw new RuntimeException("Chỉ người mua mới có thể chấp nhận báo giá lại.");
+        }
+
+        if (!"REQUOTED".equals(order.getStatus())) {
+            throw new RuntimeException("Đơn hàng không ở trạng thái chờ chấp nhận báo giá lại.");
+        }
+
+        transitionTo(order, OrderStatus.REQUOTE_ACCEPTED, currentUser, "buyerAcceptRequote");
+        order.setSellerViewed(false);
+        InterGroupOrder saved = orderRepo.save(order);
+
+        notifyUser(order.getSellerTeam().getOwner(), "Khách hàng đã chấp nhận",
+                "Khách hàng đã chấp nhận mức báo giá mới cho đơn \"" + order.getTitle() + "\". Vui lòng xác nhận chốt đơn.",
+                "ORDER_REQUOTE_ACCEPTED", null);
+
+        return toDTO(saved);
+    }
+
+    @Transactional
+    public InterGroupOrderDTO buyerRejectRequote(UUID orderId, User currentUser) {
+        InterGroupOrder order = orderRepo.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found"));
+
+        Team buyerTeam = order.getBuyerTeam();
+        User buyerUser = order.getBuyerUser();
+
+        boolean isBuyerOwner = buyerTeam != null && buyerTeam.getOwner().getId().equals(currentUser.getId());
+        boolean isBuyerDirect = buyerUser != null && buyerUser.getId().equals(currentUser.getId());
+
+        if (!isBuyerOwner && !isBuyerDirect) {
+            throw new RuntimeException("Chỉ người mua mới có thể từ chối báo giá lại.");
+        }
+
+        if (!"REQUOTED".equals(order.getStatus())) {
+            throw new RuntimeException("Đơn hàng không ở trạng thái chờ từ chối báo giá lại.");
+        }
+
+        transitionTo(order, OrderStatus.CANCELED, currentUser, "buyerRejectRequote");
+        order.setCancelledBy("BUYER");
+        order.setSellerViewed(false);
+        InterGroupOrder saved = orderRepo.save(order);
+
+        notifyUser(order.getSellerTeam().getOwner(), "Khách hàng từ chối",
+                "Khách hàng đã từ chối báo giá lại. Đơn hàng \"" + order.getTitle() + "\" đã bị hủy.",
+                "ORDER_CANCELED", null);
+
+        return toDTO(saved);
+    }
+
+    @Transactional
+    public InterGroupOrderDTO sellerConfirmRequote(UUID orderId, User currentUser) {
+        InterGroupOrder order = orderRepo.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found"));
+
+        if (!order.getSellerTeam().getOwner().getId().equals(currentUser.getId())) {
+            throw new RuntimeException("Chỉ chủ xưởng mới có thể xác nhận chốt đơn.");
+        }
+
+        if (!"REQUOTE_ACCEPTED".equals(order.getStatus())) {
+            throw new RuntimeException("Đơn hàng chưa được người mua chấp nhận báo giá lại.");
+        }
+
+        transitionTo(order, OrderStatus.CONFIRMED, currentUser, "sellerConfirmRequote");
+        order.setBuyerViewed(false);
+
+        Goal autoGoal = new Goal();
+        autoGoal.setTeam(order.getSellerTeam());
+        autoGoal.setOwner(currentUser);
+        autoGoal.setTitle("[Đơn Hàng] " + order.getTitle());
+        autoGoal.setOutputTarget("SL: " + order.getQuantity() + " | " + order.getDescription());
+        autoGoal.setPriority(2);
+        autoGoal.setDeadline(order.getDeadline());
+        autoGoal.setStatus("IN_PROGRESS");
+        goalRepo.save(autoGoal);
+        order.setLinkedGoalId(autoGoal.getId());
+
+        InterGroupOrder saved = orderRepo.save(order);
+
+        User buyerToNotify = resolveBuyerUser(order);
+        if (buyerToNotify != null) {
+            notifyUser(buyerToNotify, "Xưởng đã xác nhận",
+                    "Xưởng " + order.getSellerTeam().getName() + " đã xác nhận chốt đơn \"" + order.getTitle() + "\".",
+                    "ORDER_CONFIRMED", null);
+        }
+
         return toDTO(saved);
     }
 

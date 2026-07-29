@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.UUID;
 
 @Service
 public class VnpayPaymentService {
@@ -98,7 +99,7 @@ public class VnpayPaymentService {
     @Transactional
     public Map<String, Object> createPayment(User user, String planId, String bankCode, HttpServletRequest request) {
         Plan plan = findPlan(planId);
-        String txnRef = "ORCA" + System.currentTimeMillis();
+        String txnRef = generateUniqueTxnRef("ORCA");
 
         PaymentTransaction transaction = new PaymentTransaction();
         transaction.setTxnRef(txnRef);
@@ -148,7 +149,7 @@ public class VnpayPaymentService {
     public Map<String, Object> createMockTransfer(User user, String planId, String method) {
         Plan plan = findPlan(planId);
         String paymentMethod = normalizePaymentMethod(method);
-        String txnRef = paymentMethod + System.currentTimeMillis();
+        String txnRef = generateUniqueTxnRef(paymentMethod);
 
         PaymentTransaction transaction = new PaymentTransaction();
         transaction.setTxnRef(txnRef);
@@ -189,7 +190,7 @@ public class VnpayPaymentService {
     }
 
     private Map<String, Object> createLocalVirtualQrPayment(User user, Plan plan, String paymentMethod) {
-        String txnRef = paymentMethod + System.currentTimeMillis();
+        String txnRef = generateUniqueTxnRef(paymentMethod);
         String qrPayload = buildVirtualQrPayload(paymentMethod, txnRef, plan);
 
         PaymentTransaction transaction = new PaymentTransaction();
@@ -218,7 +219,7 @@ public class VnpayPaymentService {
     }
 
     private Map<String, Object> createMbBankQrPayment(User user, Plan plan) {
-        String txnRef = "ORCAMB" + System.currentTimeMillis();
+        String txnRef = generateUniqueTxnRef("ORCAMB");
         String orderInfo = "Thanh toan goi " + plan.name();
         
         // VietQR format
@@ -468,7 +469,26 @@ public class VnpayPaymentService {
     }
 
     private String paymentMethodLabel(String method) {
-        return "MB_BANK".equalsIgnoreCase(method) ? "MB Bank" : "VNPay";
+        if ("MB_BANK".equalsIgnoreCase(method)) {
+            return "MB Bank";
+        }
+        if ("PAYOS".equalsIgnoreCase(method)) {
+            return "PayOS";
+        }
+        return "VNPay";
+    }
+
+    private String generateUniqueTxnRef(String prefix) {
+        String normalizedPrefix = prefix == null || prefix.isBlank() ? "ORCA" : prefix.replaceAll("[^A-Za-z0-9]", "");
+        for (int attempt = 0; attempt < 5; attempt++) {
+            String timePart = Long.toString(System.currentTimeMillis(), 36).toUpperCase(Locale.ROOT);
+            String randomPart = UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase(Locale.ROOT);
+            String candidate = normalizedPrefix + timePart + randomPart;
+            if (!paymentRepository.existsByTxnRef(candidate)) {
+                return candidate;
+            }
+        }
+        return normalizedPrefix + UUID.randomUUID().toString().replace("-", "").toUpperCase(Locale.ROOT);
     }
 
     private String buildVirtualQrPayload(String method, String txnRef, Plan plan) {

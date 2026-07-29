@@ -13,6 +13,8 @@ import java.util.UUID;
 public interface PaymentTransactionRepository extends JpaRepository<PaymentTransaction, UUID> {
     Optional<PaymentTransaction> findByTxnRef(String txnRef);
 
+    boolean existsByTxnRef(String txnRef);
+
     @Query("SELECT p FROM PaymentTransaction p WHERE " +
            "(:search IS NULL OR :search = '' OR " +
            "LOWER(p.txnRef) LIKE LOWER(CONCAT('%', :search, '%')) OR " +

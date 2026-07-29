@@ -65,7 +65,7 @@ public class TrustScoreService {
      */
     public int completedVsCancelled(int completed, int cancelled) {
         int total = completed + cancelled;
-        if (total <= 0) return 100;
+        if (total <= 0) return -1;
         return (int) Math.round((double) completed / total * 100);
     }
 

@@ -192,16 +192,23 @@ public class TaskController {
     }
 
     @GetMapping("/salary/{teamId}")
-    public ResponseEntity<?> getSalaryReport(@PathVariable UUID teamId, @AuthenticationPrincipal User user) {
+    public ResponseEntity<?> getSalaryReport(@PathVariable UUID teamId,
+                                             @RequestParam(required = false) Integer year,
+                                             @RequestParam(required = false) Integer month,
+                                             @AuthenticationPrincipal User user) {
         accessControlService.requireTeamMember(user, teamId);
-        return ResponseEntity.ok(taskService.getSalaryReport(teamId));
+        return ResponseEntity.ok(taskService.getSalaryReport(teamId, year, month));
     }
 
     @GetMapping("/salary/{teamId}/export-excel")
-    public ResponseEntity<byte[]> exportSalaryExcel(@PathVariable UUID teamId, @AuthenticationPrincipal User user) throws Exception {
+    public ResponseEntity<byte[]> exportSalaryExcel(@PathVariable UUID teamId,
+                                                    @RequestParam(required = false) Integer year,
+                                                    @RequestParam(required = false) Integer month,
+                                                    @AuthenticationPrincipal User user) throws Exception {
         accessControlService.requireTeamMember(user, teamId);
-        byte[] excelBytes = taskService.exportSalaryExcel(teamId);
-        String filename = "bang-luong-" + teamId + ".xlsx";
+        byte[] excelBytes = taskService.exportSalaryExcel(teamId, year, month);
+        String period = year != null && month != null ? "-" + year + "-" + String.format("%02d", month) : "";
+        String filename = "bang-luong-" + teamId + period + ".xlsx";
         return ResponseEntity.ok()
             .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
             .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
@@ -210,9 +217,11 @@ public class TaskController {
 
     @PostMapping("/salary/{teamId}/payout")
     public ResponseEntity<?> payoutSalary(@PathVariable UUID teamId,
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Integer month,
             @AuthenticationPrincipal User user) {
         // We get totalSalary from taskService
-        Map<String, Object> mockResult = taskService.payoutSalary(teamId, user.getId());
+        Map<String, Object> mockResult = taskService.payoutSalary(teamId, user.getId(), year, month);
         double totalSalary = (double) mockResult.get("totalSalary");
         
         // Generate PayOS link

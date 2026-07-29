@@ -28,6 +28,8 @@ import java.util.Set;
 public enum OrderStatus {
     RFQ_CREATED,
     QUOTED,
+    REQUOTED,
+    REQUOTE_ACCEPTED,
     CONFIRMED,
     IN_PRODUCTION,
     QC,
@@ -43,7 +45,9 @@ public enum OrderStatus {
 
     private static final Map<OrderStatus, Set<OrderStatus>> ALLOWED = Map.ofEntries(
             Map.entry(RFQ_CREATED, EnumSet.of(QUOTED, CONFIRMED, REJECTED, CANCELED)),
-            Map.entry(QUOTED,      EnumSet.of(CONFIRMED, REJECTED, CANCELED)),
+            Map.entry(QUOTED,      EnumSet.of(CONFIRMED, REQUOTED, REJECTED, CANCELED)),
+            Map.entry(REQUOTED,    EnumSet.of(REQUOTE_ACCEPTED, CANCELED, REJECTED)),
+            Map.entry(REQUOTE_ACCEPTED, EnumSet.of(CONFIRMED, CANCELED)),
             Map.entry(CONFIRMED,   EnumSet.of(IN_PRODUCTION, SHIPPING, DELIVERED, CANCELED)),
             Map.entry(IN_PRODUCTION, EnumSet.of(QC, SHIPPING, DELIVERED, CANCELED)),
             Map.entry(QC,          EnumSet.of(COMPLETED, SHIPPING, DELIVERED, CANCELED)),
@@ -53,7 +57,7 @@ public enum OrderStatus {
             Map.entry(REVIEWED,    EnumSet.of(DISPUTED)),
             Map.entry(DISPUTED,    EnumSet.of(RESOLVED, REFUNDED)),
             Map.entry(RESOLVED,    EnumSet.of(REFUNDED, COMPLETED)),
-            Map.entry(REJECTED,    EnumSet.noneOf(OrderStatus.class)),
+            Map.entry(REJECTED,    EnumSet.of(REQUOTED)), // Can be revived by Re-quoting
             Map.entry(CANCELED,    EnumSet.noneOf(OrderStatus.class)),
             Map.entry(REFUNDED,    EnumSet.noneOf(OrderStatus.class))
     );
@@ -92,6 +96,8 @@ public enum OrderStatus {
         return switch (this) {
             case RFQ_CREATED -> "Yêu cầu báo giá";
             case QUOTED -> "Đã báo giá";
+            case REQUOTED -> "Đã báo giá lại";
+            case REQUOTE_ACCEPTED -> "Người mua đồng ý";
             case CONFIRMED -> "Đã xác nhận";
             case IN_PRODUCTION -> "Đang sản xuất";
             case QC -> "Kiểm định QC";

@@ -13,6 +13,8 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.ByteArrayOutputStream;
+import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -365,6 +367,14 @@ public class TaskService {
 
     /** Calculate salary report for all members in a team */
     public List<SalaryDTO> getSalaryReport(UUID teamId) {
+        return getSalaryReport(teamId, null, null);
+    }
+
+    /** Calculate salary report for all members in a team for a selected month. */
+    public List<SalaryDTO> getSalaryReport(UUID teamId, Integer year, Integer month) {
+        YearMonth salaryMonth = resolveSalaryMonth(year, month);
+        LocalDate periodStart = salaryMonth != null ? salaryMonth.atDay(1) : null;
+        LocalDate periodEnd = salaryMonth != null ? salaryMonth.atEndOfMonth() : null;
         List<TeamMember> members = teamMemberRepo.findByTeamId(teamId);
         List<SalaryDTO> report = new ArrayList<>();
 
@@ -375,6 +385,7 @@ public class TaskService {
             List<Task> teamTasks = tasks.stream()
                 .filter(t -> t.getGoal() != null && t.getGoal().getTeam() != null
                     && t.getGoal().getTeam().getId().equals(teamId))
+                .filter(t -> isTaskInSalaryPeriod(t, periodStart, periodEnd))
                 .collect(Collectors.toList());
 
             int totalTasks = teamTasks.size();
@@ -385,7 +396,9 @@ public class TaskService {
                 .sum();
 
             // Get attendance data for this member and team
-            List<Attendance> attendances = attendanceRepo.findByUserIdAndTeamId(member.getId(), teamId);
+            List<Attendance> attendances = salaryMonth == null
+                    ? attendanceRepo.findByUserIdAndTeamId(member.getId(), teamId)
+                    : attendanceRepo.findByUserIdAndTeamIdAndDateBetween(member.getId(), teamId, periodStart, periodEnd);
             double totalRegularHours = attendances.stream().mapToDouble(a -> a.getRegularHours() != null ? a.getRegularHours() : 0.0).sum();
             double totalOvertimeHours = attendances.stream().mapToDouble(a -> a.getOvertimeHours() != null ? a.getOvertimeHours() : 0.0).sum();
 
@@ -418,6 +431,31 @@ public class TaskService {
             report.add(dto);
         }
         return report;
+    }
+
+    private YearMonth resolveSalaryMonth(Integer year, Integer month) {
+        if (year == null || month == null) {
+            return null;
+        }
+        if (month < 1 || month > 12) {
+            throw new RuntimeException("Thang bang luong khong hop le.");
+        }
+        return YearMonth.of(year, month);
+    }
+
+    private boolean isTaskInSalaryPeriod(Task task, LocalDate periodStart, LocalDate periodEnd) {
+        if (periodStart == null || periodEnd == null) {
+            return true;
+        }
+        LocalDate taskDate = null;
+        if (task.getDueTime() != null) {
+            taskDate = task.getDueTime().toLocalDate();
+        } else if (task.getDeadline() != null) {
+            taskDate = task.getDeadline().toLocalDate();
+        } else if (task.getCreatedAt() != null) {
+            taskDate = task.getCreatedAt().toLocalDate();
+        }
+        return taskDate != null && !taskDate.isBefore(periodStart) && !taskDate.isAfter(periodEnd);
     }
 
     public void delete(UUID id) {
@@ -699,7 +737,11 @@ public class TaskService {
     }
 
     public byte[] exportSalaryExcel(UUID teamId) throws Exception {
-        List<SalaryDTO> report = getSalaryReport(teamId);
+        return exportSalaryExcel(teamId, null, null);
+    }
+
+    public byte[] exportSalaryExcel(UUID teamId, Integer year, Integer month) throws Exception {
+        List<SalaryDTO> report = getSalaryReport(teamId, year, month);
         try (Workbook wb = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             Sheet sheet = wb.createSheet("Bang luong");
             String[] headers = {"STT", "Nhan vien", "Tong task", "Hoan thanh", "Gio thuong", "Gio tang ca",
@@ -737,7 +779,11 @@ public class TaskService {
     }
 
     public Map<String, Object> payoutSalary(UUID teamId, UUID actorId) {
-        List<SalaryDTO> report = getSalaryReport(teamId);
+        return payoutSalary(teamId, actorId, null, null);
+    }
+
+    public Map<String, Object> payoutSalary(UUID teamId, UUID actorId, Integer year, Integer month) {
+        List<SalaryDTO> report = getSalaryReport(teamId, year, month);
         double totalSalary = report.stream()
                 .mapToDouble(s -> {
                     // Use attendance hours if available, fallback to task workload (same as getSalaryReport)

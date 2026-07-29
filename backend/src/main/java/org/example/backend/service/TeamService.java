@@ -38,6 +38,9 @@ public class TeamService {
     @Autowired
     private JwtUtil jwtUtil;
 
+    @Autowired
+    private TrustScoreService trustScoreService;
+
     /**
      * Lấy tất cả nhóm mà user tham gia
      */
@@ -391,9 +394,7 @@ public class TeamService {
         dto.setCompletedOrders(team.getCompletedOrders());
         dto.setCancelledOrders(team.getCancelledOrders());
         dto.setTotalOrders(team.getTotalOrders());
-        int trust = team.getTotalOrders() > 0
-                ? (int) ((double) team.getCompletedOrders() / team.getTotalOrders() * 100)
-                : 0;
+        int trust = trustScoreService.calculate(team);
         dto.setTrustScore(trust);
 
         // Detailed Factory Information

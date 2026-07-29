@@ -19,6 +19,7 @@ public interface AttendanceRepository extends JpaRepository<Attendance, UUID> {
     List<Attendance> findByTeamId(UUID teamId);
     List<Attendance> findByTeamIdAndDateBetween(UUID teamId, LocalDate startDate, LocalDate endDate);
     List<Attendance> findByUserIdAndTeamId(UUID userId, UUID teamId);
+    List<Attendance> findByUserIdAndTeamIdAndDateBetween(UUID userId, UUID teamId, LocalDate startDate, LocalDate endDate);
 
     @Query("SELECT a FROM Attendance a WHERE a.team.id = :teamId AND a.date = :date")
     List<Attendance> findByTeamIdAndDate(@Param("teamId") UUID teamId, @Param("date") LocalDate date);

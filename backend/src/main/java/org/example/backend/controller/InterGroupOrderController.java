@@ -73,6 +73,32 @@ public class InterGroupOrderController {
         return ResponseEntity.ok(orderService.quoteOrder(orderId, price, note, user));
     }
 
+    @PostMapping("/{orderId}/requote")
+    public ResponseEntity<?> requoteOrder(@PathVariable UUID orderId, @RequestBody Map<String, Object> payload, @AuthenticationPrincipal User user) {
+        accessControlService.requireInterGroupOrderAccess(user, orderId);
+        Double price = payload.containsKey("price") && payload.get("price") != null ? Double.valueOf(payload.get("price").toString()) : null;
+        String note = (String) payload.get("note");
+        return ResponseEntity.ok(orderService.requoteOrder(orderId, price, note, user));
+    }
+
+    @PostMapping("/{orderId}/buyer-accept-requote")
+    public ResponseEntity<?> buyerAcceptRequote(@PathVariable UUID orderId, @AuthenticationPrincipal User user) {
+        accessControlService.requireInterGroupOrderAccess(user, orderId);
+        return ResponseEntity.ok(orderService.buyerAcceptRequote(orderId, user));
+    }
+
+    @PostMapping("/{orderId}/buyer-reject-requote")
+    public ResponseEntity<?> buyerRejectRequote(@PathVariable UUID orderId, @AuthenticationPrincipal User user) {
+        accessControlService.requireInterGroupOrderAccess(user, orderId);
+        return ResponseEntity.ok(orderService.buyerRejectRequote(orderId, user));
+    }
+
+    @PostMapping("/{orderId}/seller-confirm-requote")
+    public ResponseEntity<?> sellerConfirmRequote(@PathVariable UUID orderId, @AuthenticationPrincipal User user) {
+        accessControlService.requireInterGroupOrderAccess(user, orderId);
+        return ResponseEntity.ok(orderService.sellerConfirmRequote(orderId, user));
+    }
+
     @PostMapping("/{orderId}/confirm-quote")
     public ResponseEntity<?> confirmQuote(@PathVariable UUID orderId, @AuthenticationPrincipal User user) {
         accessControlService.requireInterGroupOrderAccess(user, orderId);

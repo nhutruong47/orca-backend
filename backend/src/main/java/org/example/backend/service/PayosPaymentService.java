@@ -19,6 +19,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 public class PayosPaymentService {
@@ -47,7 +48,7 @@ public class PayosPaymentService {
     @Transactional
     public Map<String, Object> createPaymentLink(User user, String planId) {
         Plan plan = findPlan(planId);
-        long orderCode = System.currentTimeMillis() / 1000 + (long)(Math.random() * 10000);
+        long orderCode = generateUniqueOrderCode();
         String txnRef = String.valueOf(orderCode);
 
         PaymentTransaction transaction = new PaymentTransaction();
@@ -88,7 +89,7 @@ public class PayosPaymentService {
 
     @Transactional
     public Map<String, Object> createSalaryPaymentLink(User user, String teamId, long amount) {
-        long orderCode = System.currentTimeMillis() / 1000 + (long)(Math.random() * 10000);
+        long orderCode = generateUniqueOrderCode();
         String txnRef = String.valueOf(orderCode);
 
         PaymentTransaction transaction = new PaymentTransaction();
@@ -186,6 +187,16 @@ public class PayosPaymentService {
             return "plus";
         }
         return normalized;
+    }
+
+    private long generateUniqueOrderCode() {
+        for (int attempt = 0; attempt < 5; attempt++) {
+            long candidate = System.currentTimeMillis() * 1000L + ThreadLocalRandom.current().nextInt(1000);
+            if (!paymentRepository.existsByTxnRef(String.valueOf(candidate))) {
+                return candidate;
+            }
+        }
+        return System.currentTimeMillis() * 1000L + ThreadLocalRandom.current().nextInt(1000);
     }
 
     private record Plan(String id, String name, long monthlyPrice, long tokenLimit) {}
