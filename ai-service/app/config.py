@@ -6,10 +6,19 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-def _gemini_model_env(name: str, default: str = "gemini-3.5-flash-lite") -> str:
+def _gemini_model_env(name: str, default: str = "gemini-2.5-flash") -> str:
     model = os.getenv(name, default).strip().strip('"').strip("'")
-    if model in {"gemini-1.5-flash", "gemini-2.5-flash", "gemini-2.5-flash-lite"}:
-        return "gemini-3.5-flash-lite"
+    unavailable_models = {
+        "gemini-1.5-flash",
+        "gemini-1.5-flash-latest",
+        "gemini-1.5-pro",
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-lite",
+        "gemini-3.5-flash",
+        "gemini-3.5-flash-lite",
+    }
+    if not model or model in unavailable_models:
+        return default
     return model
 
 
