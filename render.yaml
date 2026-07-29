@@ -7,6 +7,10 @@ services:
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: prod
+      - key: AI_V2_SERVICE_URL
+        value: https://orca-ai-service.onrender.com
+      - key: AI_SERVICE_BASE_URL
+        value: https://orca-ai-service.onrender.com
 
   - type: web
     name: orca-ai-service
