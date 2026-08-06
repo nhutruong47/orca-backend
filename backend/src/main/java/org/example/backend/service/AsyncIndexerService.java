@@ -47,7 +47,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * fails we log and continue — the next mutation for the same record will
  * retry.
  */
-@Service
+// Disabled: Ver4 RAG indexing was replaced by the stable Ver3 AI workflow.
+// Keep event record types available for callers, but do not register this as a Spring service.
 @Transactional
 public class AsyncIndexerService {
 

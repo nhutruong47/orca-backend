@@ -6,10 +6,10 @@ import org.example.backend.dto.AiParseResult;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
 
 import org.example.backend.repository.TeamMemberRepository;
@@ -19,13 +19,18 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 @Service
-@Transactional
 public class AiServiceClient {
 
     private static final Logger logger = LoggerFactory.getLogger(AiServiceClient.class);
 
     @Value("${ai.service.api-key:}")
     private String geminiApiKey;
+
+    @Value("${ai.service.model:${GEMINI_MODEL:gemini-2.5-flash-lite}}")
+    private String geminiModel;
+
+    @Value("${ai.service.env-file:${AI_SERVICE_ENV_FILE:../../ai-service/.env}}")
+    private String aiServiceEnvFile;
 
     private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -44,6 +49,13 @@ public class AiServiceClient {
         } else {
             logger.error("DEBUG AiServiceClient - Gemini API Key is MISSING!");
         }
+        if (this.geminiModel != null) {
+            this.geminiModel = this.geminiModel.trim();
+        }
+        if (this.aiServiceEnvFile != null) {
+            this.aiServiceEnvFile = this.aiServiceEnvFile.trim();
+        }
+        logger.info("DEBUG AiServiceClient - Gemini Model: {}", resolveGeminiModel());
     }
 
     public AiParseResult generateTaskPlan(String outputTarget, String deadline, Integer priority,
@@ -105,9 +117,10 @@ public class AiServiceClient {
         }
 
         AiParseResult result = null;
-        if (geminiApiKey != null && !geminiApiKey.isEmpty()) {
+        String apiKey = resolveGeminiApiKey();
+        if (apiKey != null && !apiKey.isEmpty()) {
             try {
-                result = parseWithGemini(text, memberContext, historyContext, inventoryContext);
+                result = parseWithGemini(text, memberContext, historyContext, inventoryContext, apiKey, resolveGeminiModel());
             } catch (Exception e) {
                 logger.error("⚠️ Lỗi gọi Gemini: {}", e.getMessage(), e);
                 result = new AiParseResult();
@@ -135,7 +148,8 @@ public class AiServiceClient {
         return result;
     }
 
-    private AiParseResult parseWithGemini(String text, String memberContext, String historyContext, String inventoryContext) throws Exception {
+    private AiParseResult parseWithGemini(String text, String memberContext, String historyContext, String inventoryContext,
+            String apiKey, String model) throws Exception {
         String memberSection = "";
         if (memberContext != null && !memberContext.isEmpty()) {
             memberSection = "\n--- DANH SÁCH THÀNH VIÊN VÀ NHÃN DÁN CÔNG VIỆC ---\n"
@@ -196,7 +210,7 @@ public class AiServiceClient {
         generationConfig.put("responseMimeType", "application/json");
         requestBody.put("generationConfig", generationConfig);
 
-        String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=" + geminiApiKey;
+        String url = "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + apiKey;
         
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -207,7 +221,7 @@ public class AiServiceClient {
 
         String responseBody;
         try {
-            logger.info("📡 Calling Gemini API: {}", url);
+            logger.info("📡 Calling Gemini API model: {}", model);
             ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
             responseBody = response.getBody();
         } catch (org.springframework.web.client.HttpClientErrorException.TooManyRequests e) {
@@ -244,6 +258,73 @@ public class AiServiceClient {
         if (jsonStr.endsWith("```")) jsonStr = jsonStr.substring(0, jsonStr.length() - 3).trim();
 
         return objectMapper.readValue(jsonStr, AiParseResult.class);
+    }
+
+    private String resolveGeminiApiKey() {
+        String configuredKey = normalizeConfigValue(geminiApiKey);
+        if (configuredKey != null) {
+            return configuredKey;
+        }
+        return normalizeConfigValue(readDotEnvValue("GEMINI_API_KEY"));
+    }
+
+    private String resolveGeminiModel() {
+        String dotenvModel = normalizeConfigValue(readDotEnvValue("GEMINI_MODEL"));
+        if (dotenvModel != null) {
+            return dotenvModel;
+        }
+        String configuredModel = normalizeConfigValue(geminiModel);
+        return configuredModel != null ? configuredModel : "gemini-2.5-flash-lite";
+    }
+
+    private String normalizeConfigValue(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        if ((normalized.startsWith("\"") && normalized.endsWith("\""))
+                || (normalized.startsWith("'") && normalized.endsWith("'"))) {
+            normalized = normalized.substring(1, normalized.length() - 1).trim();
+        }
+        if (normalized.isEmpty() || "your_api_key_here".equalsIgnoreCase(normalized)) {
+            return null;
+        }
+        return normalized;
+    }
+
+    private String readDotEnvValue(String key) {
+        String envPath = normalizeConfigValue(aiServiceEnvFile);
+        if (envPath == null) {
+            return null;
+        }
+        try {
+            Path path = Path.of(envPath);
+            if (!path.isAbsolute()) {
+                path = Path.of("").toAbsolutePath().resolve(path).normalize();
+            }
+            if (!Files.exists(path)) {
+                return null;
+            }
+            String value = null;
+            for (String line : Files.readAllLines(path)) {
+                String trimmed = line.trim();
+                if (trimmed.isEmpty() || trimmed.startsWith("#")) {
+                    continue;
+                }
+                int index = trimmed.indexOf('=');
+                if (index <= 0) {
+                    continue;
+                }
+                String name = trimmed.substring(0, index).trim();
+                if (key.equals(name)) {
+                    value = trimmed.substring(index + 1).trim();
+                }
+            }
+            return value;
+        } catch (Exception e) {
+            logger.warn("Could not read AI service .env file '{}': {}", envPath, e.getMessage());
+            return null;
+        }
     }
 
     private AiParseResult parseWithRegex(String text) {

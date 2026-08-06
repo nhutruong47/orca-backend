@@ -32,11 +32,18 @@ class GeminiReviseError(RuntimeError):
 
 def extract(request: ExtractRequest) -> ExtractResponse:
     prompt = _build_extract_prompt(request)
-    data = _generate_json_object(prompt, max_output_tokens=2048, error_cls=GeminiExtractError)
+    data = _generate_json_object(prompt, max_output_tokens=4096, error_cls=GeminiExtractError)
     try:
-        return ExtractResponse.model_validate(data)
+        response = ExtractResponse.model_validate(data)
     except ValidationError as exc:
         raise GeminiExtractError(f"Gemini extract JSON failed schema validation: {exc}") from exc
+    response = _apply_extract_context(response, request)
+    # Always override clarifyingQuestion with our precise computed version based on actual missing fields
+    if response.missingFields:
+        response.clarifyingQuestion = _clarifying_question_for_missing(response.intent, response.missingFields, response.fields)
+    elif response.intent == "UNKNOWN" and not response.clarifyingQuestion:
+        response.clarifyingQuestion = _clarifying_question_for_missing(response.intent, response.missingFields, response.fields)
+    return response
 
 
 def plan(request: PlanRequest) -> PlanDraftResponse:
@@ -59,17 +66,147 @@ def revise(request: ReviseRequest) -> PlanDraftResponse:
         return safe_draft
 
     prompt = _build_revise_prompt(request)
-    data = _generate_json_object(prompt, max_output_tokens=8192, error_cls=GeminiReviseError)
+
+    def _attempt(extra_suffix: str = "") -> PlanDraftResponse:
+        data = _generate_json_object(prompt + extra_suffix, max_output_tokens=8192, error_cls=GeminiReviseError)
+        try:
+            draft = PlanDraftResponse.model_validate(data)
+        except ValidationError as exc:
+            raise GeminiReviseError(f"Gemini revise JSON failed schema validation: {exc}") from exc
+        draft = _normalize_revise_output(draft, request)
+        return _validate_revise_output(draft, request)
+
     try:
-        draft = PlanDraftResponse.model_validate(data)
-    except ValidationError as exc:
-        raise GeminiReviseError(f"Gemini revise JSON failed schema validation: {exc}") from exc
-    draft = _normalize_revise_output(draft, request)
-    return _validate_revise_output(draft, request)
+        return _attempt()
+    except GeminiReviseError:
+        # Retry once with a stricter instruction appended to the prompt
+        retry_suffix = (
+            "\n\n[RETRY INSTRUCTION] Your previous response was rejected by validation rules. "
+            "Do NOT change any field that was not explicitly mentioned in the user's instruction. "
+            "Only modify the specific parts the user asked about. Keep all other fields identical."
+        )
+        try:
+            return _attempt(retry_suffix)
+        except GeminiReviseError:
+            # Fallback: return original draft untouched + friendly aiNote
+            fallback = request.draft.model_copy(deep=True)
+            fallback.aiNote = "Mình chưa hiểu rõ yêu cầu chỉnh sửa này. Bạn thử mô tả cụ thể hơn nhé? Ví dụ: \"đổi tên thành...\", \"thêm công việc...\", \"đổi hạn thành ngày...\"."
+            return fallback
 
 
+
+
+def _apply_extract_context(response: ExtractResponse, request: ExtractRequest) -> ExtractResponse:
+    context = request.context
+    if context is None or context.mode != "WAITING_CLARIFICATION":
+        return response
+
+    # If the user asked an UNKNOWN out-of-scope question, do not stick to previous context intent
+    if response.intent == "UNKNOWN":
+        return response
+
+    fields = dict(context.previousFields or {})
+    fields.update({key: value for key, value in (response.fields or {}).items() if value not in (None, "", [])})
+
+    intent = response.intent
+    if context.intent and context.intent != "UNKNOWN":
+        intent = context.intent
+
+    missing = _missing_extract_fields(intent, fields)
+    clarifying_question = None if not missing else _clarifying_question_for_missing(intent, missing, fields)
+    confidence = max(response.confidence, 0.7 if not missing else 0.55)
+
+    return ExtractResponse(
+        intent=intent,
+        confidence=min(confidence, 1),
+        fields=fields,
+        missingFields=missing,
+        clarifyingQuestion=clarifying_question,
+    )
+
+
+def _missing_extract_fields(intent: str, fields: dict[str, Any]) -> list[str]:
+    if intent == "PRODUCTION_PLAN":
+        required = ["productName", "quantity", "unit", "deadline"]
+    elif intent == "OPERATION_TASK":
+        required = ["title", "deadline"]
+    else:
+        return []
+
+    missing: list[str] = []
+    for key in required:
+        value = fields.get(key)
+        if value is None or value == "" or value == []:
+            missing.append(key)
+    return missing
+
+
+def _clarifying_question_for_missing(intent: str, missing: list[str], fields: dict | None = None) -> str:
+    fields = fields or {}
+    product = fields.get("productName", "")
+    qty = fields.get("quantity", "")
+    unit = fields.get("unit", "")
+
+    if intent == "UNKNOWN":
+        return "Dạ em là trợ lý ORCA chuyên hỗ trợ quản lý sản xuất và công việc cho xưởng. Anh/chị cần em giúp lên kế hoạch sản xuất hay tạo công việc vận hành nào không ạ?"
+
+    # Single missing field — ask naturally and specifically
+    if missing == ["deadline"]:
+        if product and qty and unit:
+            return f"Anh/chị muốn hoàn thành mẻ {product} {qty}{unit} này trước thời gian nào ạ?"
+        if product:
+            return f"Anh/chị cho mình biết hạn hoàn thành cho yêu cầu {product} này nhé?"
+        return "Anh/chị muốn hoàn thành công việc này trước ngày/giờ nào ạ?"
+
+    if missing == ["productName"]:
+        return "Anh/chị đang muốn sản xuất sản phẩm gì vậy ạ? (ví dụ: Arabica, Robusta, Blend...)"
+
+    if missing == ["quantity"]:
+        if product:
+            return f"Anh/chị muốn sản xuất bao nhiêu {product} ạ?"
+        return "Anh/chị muốn sản xuất bao nhiêu ạ?"
+
+    if missing == ["unit"]:
+        return "Đơn vị tính là gì ạ? (ví dụ: kg, tấn, túi...)"
+
+    if missing == ["title"]:
+        return "Anh/chị muốn tạo công việc gì ạ?"
+
+    # Multiple missing fields — list them out clearly
+    label_map = {
+        "productName": "tên sản phẩm (ví dụ: Arabica, Robusta)",
+        "quantity":    "số lượng",
+        "unit":        "đơn vị (kg, tấn...)",
+        "deadline":    "hạn hoàn thành",
+        "title":       "nội dung công việc",
+        "taskDescription": "mô tả công việc",
+    }
+    readable = ", ".join(label_map.get(f, f) for f in missing)
+    if intent == "PRODUCTION_PLAN":
+        return f"Anh/chị bổ sung giúp mình {readable} cho yêu cầu sản xuất này nhé?"
+    if intent == "OPERATION_TASK":
+        return f"Anh/chị bổ sung giúp mình {readable} cho công việc này nhé?"
+    return "Dạ em là trợ lý ORCA chuyên hỗ trợ quản lý xưởng. Anh/chị cần em hỗ trợ lên kế hoạch sản xuất hay giao việc gì hôm nay không ạ?"
+
+
+def _build_extract_context_section(request: ExtractRequest) -> str:
+    if request.context is None:
+        return "No active conversation context. Treat the user request as a new request."
+
+    context_json = json.dumps(request.context.model_dump(), ensure_ascii=False, indent=2)
+    return f"""
+Active conversation context:
+{context_json}
+
+Context rules:
+- mode WAITING_CLARIFICATION means the user is answering a previous clarifying question.
+- Preserve originalText, previousFields, and intent unless the latest message clearly corrects one of them.
+- Extract only the missing or corrected fields from the latest user message, then return the full merged fields object.
+- Do not restart classification from scratch when context.intent is PRODUCTION_PLAN or OPERATION_TASK.
+""".strip()
 def _build_extract_prompt(request: ExtractRequest) -> str:
     now = _local_now()
+    context_section = _build_extract_context_section(request)
     return f"""
 You are ORCA AI v2 extract module for a Vietnamese workshop/task management app.
 
@@ -90,13 +227,15 @@ Required fields:
 
 Deadline rules:
 - Return deadline as ISO local datetime string without timezone offset, e.g. "2026-06-07T17:00:00".
-- Resolve Vietnamese relative dates using Current local datetime.
+- Resolve Vietnamese relative and absolute dates using Current local datetime (year {now.year}).
+- "5 tháng 8" or "hạn 5 tháng 8" or "ngày 5 tháng 8" or "5/8" means day 5 of month 8 in the current year: "{now.year}-08-05T17:00:00".
 - "hom nay"/"hôm nay" means today.
 - "ngay mai"/"ngày mai"/"mai" means tomorrow.
 - "sang"/"sáng" default time 09:00.
 - "chieu"/"chiều" default time 14:00.
 - If date is present but time is absent, default time 17:00.
 - If exact time is present, use that exact time.
+- When the user text contains a date phrase (e.g. "hạn 5 tháng 8", "ngày 5/8", "hôm nay"), you MUST extract deadline into fields and remove "deadline" from missingFields.
 
 Output only one JSON object matching this schema:
 {{
@@ -110,10 +249,13 @@ Output only one JSON object matching this schema:
 Field conventions:
 - fields.priority must be "LOW", "MEDIUM", or "HIGH" when known.
 - PRODUCTION_PLAN fields may include: title, productName, quantity, unit, deadline, priority.
+- For detailed production orders, preserve all provided specs in fields using clear keys such as orderCode, startDate, deliveryDate, composition, materialSources, roastLevel, targetAgtron, grindType, targetMicron, flavorNotes, packagingSpec, expectedPackageCount, packageMaterial, labelSpec, cartonSpec, qualityRequirements. Do not drop details.
 - OPERATION_TASK fields may include: title, area, deadline, priority.
 - UNKNOWN should not invent production fields.
 - If missingFields is not empty, clarifyingQuestion must ask for those missing details in Vietnamese.
-- If missingFields is empty, clarifyingQuestion must be null.
+- If intent is UNKNOWN (out-of-scope, casual chat, weather, general knowledge, or unsupported feature requests):
+  - missingFields MUST be empty [].
+  - clarifyingQuestion MUST be a witty, friendly, humorous response in Vietnamese. Use the specific topic of the user's input (e.g. weather, geography, love, revenue reports) to make a lighthearted joke about your limitations as a workshop assistant, then warmly guide them back to creating a production plan or an operational task.
 
 Examples:
 User: "Rang 120kg Arabica trước 17:00 hôm nay"
@@ -126,11 +268,30 @@ JSON:
     "productName": "Arabica",
     "quantity": 120,
     "unit": "kg",
-    "deadline": "{now.strftime("%Y-%m-%d")}T17:00:00",
-    "priority": "HIGH"
+    "deadline": "{now.year}-08-03T17:00:00"
   }},
   "missingFields": [],
   "clarifyingQuestion": null
+}}
+
+User: "Thời tiết hôm nay thế nào?"
+JSON:
+{{
+  "intent": "UNKNOWN",
+  "confidence": 0.95,
+  "fields": {{}},
+  "missingFields": [],
+  "clarifyingQuestion": "Mình không biết dự báo thời tiết hôm nay nắng hay mưa đâu ☀️🌧️, nhưng mình biết chắc xưởng bạn đang chờ lên mẻ sản xuất đấy! Bạn muốn tạo mẻ rang nào hôm nay không?"
+}}
+
+User: "Quê của Bác Hồ ở đâu?"
+JSON:
+{{
+  "intent": "UNKNOWN",
+  "confidence": 0.95,
+  "fields": {{}},
+  "missingFields": [],
+  "clarifyingQuestion": "Biết quê Bác ở Nam Đàn, Nghệ An thì vượt quá tầm phủ sóng của một trợ lý xưởng như mình rồi 😅! Mình chỉ giỏi chia việc và lên mẻ sản xuất thôi. Bạn có việc gì cần mình giao hôm nay không?"
 }}
 
 User: "Làm cái kia cho khách"
@@ -143,6 +304,9 @@ JSON:
   "clarifyingQuestion": "Anh/chị muốn tạo công việc gì và hạn hoàn thành khi nào?"
 }}
 
+Conversation context:
+{context_section}
+
 Now extract this user request:
 {request.text}
 """.strip()
@@ -151,7 +315,10 @@ Now extract this user request:
 def _build_plan_prompt(request: PlanRequest) -> str:
     fields_json = json.dumps(request.fields, ensure_ascii=False, indent=2)
     members_json = json.dumps([member.model_dump() for member in request.members], ensure_ascii=False, indent=2)
-    task_count_rule = "3 to 6 tasks" if request.intent == "PRODUCTION_PLAN" else "2 to 4 tasks"
+    if request.intent == "PRODUCTION_PLAN" and _is_detailed_production_order(request.fields or {}):
+        task_count_rule = "6 to 12 tasks"
+    else:
+        task_count_rule = "3 to 6 tasks" if request.intent == "PRODUCTION_PLAN" else "2 to 4 tasks"
 
     return f"""
 You are ORCA AI v2 plan module for a Vietnamese workshop/task management app.
@@ -189,20 +356,28 @@ Output only one JSON object matching this exact schema:
 
 Hard rules:
 - Return {task_count_rule}.
+- Keep each task title concise, under 90 characters.
+- Keep each task description concise, one sentence, under 240 characters.
+- For detailed orders, distribute requirements across tasks instead of repeating all specs in every task.
 - deadline must be copied from extracted fields.deadline exactly when present.
 - priority must be an integer: 1 lowest, 3 medium, 5 highest.
 - workload is estimated effort hours, must be greater than 0.
 - suggestedAssigneeId is optional and must be one of the provided team member userId values.
 - If no suitable member exists, set suggestedAssigneeId and suggestedAssigneeName to null.
 - A member with empty jobLabels is not suitable for any specialized task.
-- Only suggest a member when their jobLabels semantically match the task.
+- Only suggest a member when their jobLabels semantically match the main action of the task. If a member has a jobLabel directly matching a task action (such as 'phối trộn' or 'trộn' for blending tasks, 'medium roast', 'rang', or 'rang xay' for roasting tasks, 'xay' for grinding, 'đóng gói' for packaging), you MUST suggest that member for that task.
+- For primary execution tasks (e.g., 'Rang 129kg', 'Phối trộn', 'Xay hạt', 'Đóng gói'), match members whose jobLabels contain relevant execution keywords (e.g., 'rang', 'rang xay', 'phối trộn', 'trộn', 'medium roast', 'sản xuất', 'xay', 'đóng gói') regardless of accents/diacritics or casing. ALWAYS prioritize assigning the specialist member with matching jobLabels (e.g. 'rang', 'rang xay') to the PRIMARY roasting execution task FIRST. Do NOT assign the roaster exclusively to a preliminary preparation task while leaving the main roasting task unassigned (Task 'Rang 129kg').
+- A qualified team member CAN be suggested for multiple tasks in the plan if they are the only qualified person for those tasks.
+- NEVER evaluate an execution task (roasting, grinding, blending, packaging) as requiring a QC/quality control label, even if its description mentions quality standards. QC label matching is reserved strictly and exclusively for dedicated quality inspection/testing/cupping tasks.
 - Never invent a person, username, full name, or userId.
 - suggestedAssigneeName must match the selected member's fullName when available, otherwise username.
 - Keep the draft in Vietnamese.
+- If extracted fields contain detailed order, product, packaging, grinding, roasting, flavor, or quality specs, every provided requirement must appear in either goalTitle, outputTarget, or at least one task title/description. Do not omit provided specs.
 - The draft is not saved data, so do not include id, status, createdAt, totalTasks, or database fields.
 
 Intent-specific rules:
 - PRODUCTION_PLAN: create production workflow tasks, such as preparation, execution, checking/QC, and completion.
+- PRODUCTION_PLAN with detailed order specs: create enough tasks to cover material preparation/blending, roasting target, grinding target, packaging material/labeling, carton packing, QC requirements, and delivery deadline.
 - PRODUCTION_PLAN: always include at least one QC/kiểm tra chất lượng task.
 - PRODUCTION_PLAN: goalTitle and outputTarget must include productName, quantity, and unit when present.
 - OPERATION_TASK: create only internal operation tasks based on title/area.
@@ -269,6 +444,7 @@ Hard rules:
 - A member with empty jobLabels is not suitable for any specialized task.
 - Never invent a person, username, full name, or userId.
 - Keep the draft in Vietnamese.
+- If extracted fields contain detailed order, product, packaging, grinding, roasting, flavor, or quality specs, every provided requirement must appear in either goalTitle, outputTarget, or at least one task title/description. Do not omit provided specs.
 
 Deadline rules:
 - Return deadline as ISO local datetime string without timezone offset, e.g. "2026-06-09T18:00:00".
@@ -280,12 +456,25 @@ Now return the revised draft JSON.
 """.strip()
 
 
+
+def _is_detailed_production_order(fields: dict[str, Any]) -> bool:
+    detail_keys = {
+        "orderCode", "startDate", "deliveryDate", "composition", "materialSources",
+        "roastLevel", "targetAgtron", "grindType", "targetMicron", "flavorNotes",
+        "packagingSpec", "expectedPackageCount", "packageMaterial", "labelSpec",
+        "cartonSpec", "qualityRequirements",
+    }
+    if len(detail_keys.intersection(fields.keys())) >= 3:
+        return True
+    return len(fields.keys()) >= 10
 def _validate_plan_input(request: PlanRequest) -> None:
     if request.intent == "UNKNOWN":
         raise GeminiPlanInputError("Cannot create a plan for UNKNOWN intent.")
 
     fields = request.fields or {}
     if request.intent == "PRODUCTION_PLAN":
+        if _is_blank(fields.get("productName")) or _is_generic_product_name(fields.get("productName")):
+            fields["productName"] = "Cà phê"
         required = ["productName", "quantity", "unit", "deadline"]
     elif request.intent == "OPERATION_TASK":
         required = ["title", "deadline"]
@@ -293,8 +482,6 @@ def _validate_plan_input(request: PlanRequest) -> None:
         raise GeminiPlanInputError(f"Unsupported intent for plan: {request.intent}")
 
     missing = [field for field in required if _is_blank(fields.get(field))]
-    if request.intent == "PRODUCTION_PLAN" and _is_generic_product_name(fields.get("productName")):
-        missing.append("productName")
     if missing:
         raise GeminiPlanInputError(f"Cannot create plan because required fields are missing: {', '.join(missing)}.")
 
@@ -310,7 +497,10 @@ def _validate_plan_output(draft: PlanDraftResponse, request: PlanRequest) -> Pla
     if request.intent == "PRODUCTION_PLAN":
         draft.tasks = [_fill_missing_production_assignee(task, allowed_members) for task in draft.tasks]
         draft.tasks = [_sanitize_production_assignee(task, allowed_members) for task in draft.tasks]
-        _require_task_count(draft.tasks, minimum=3, maximum=6)
+        if _is_detailed_production_order(fields):
+            _require_task_count(draft.tasks, minimum=6, maximum=12)
+        else:
+            _require_task_count(draft.tasks, minimum=3, maximum=6)
     elif request.intent == "OPERATION_TASK":
         _require_task_count(draft.tasks, minimum=2, maximum=4)
         draft.tasks = [_sanitize_operation_assignee(task, allowed_members) for task in draft.tasks]
@@ -329,7 +519,11 @@ def _validate_revise_output(draft: PlanDraftResponse, request: ReviseRequest) ->
     allowed_members = {member.userId: member for member in request.members}
     draft.tasks = [_sanitize_assignee(task, allowed_members) for task in draft.tasks]
 
-    if not _mentions_any(instruction, ["tieu de", "title", "goal", "muc tieu", "output", "ket qua"]):
+    if not _mentions_any(instruction, [
+        "tieu de", "title", "goal", "muc tieu", "output", "ket qua",
+        "sua", "doi", "thanh", "ten", "doi ten",
+        "arabica", "robusta", "blend", "cafe", "ca phe", "me", "san pham",
+    ]):
         _require_equal(draft.goalTitle, original.goalTitle, "Gemini revise changed goalTitle without instruction.")
         _require_equal(draft.outputTarget, original.outputTarget, "Gemini revise changed outputTarget without instruction.")
 
@@ -342,7 +536,10 @@ def _validate_revise_output(draft: PlanDraftResponse, request: ReviseRequest) ->
             raise GeminiReviseError(
                 f"Gemini revise returned {len(draft.tasks)} tasks, expected {requested_task_count} tasks."
             )
-    elif not _mentions_any(instruction, ["them", "xoa", "rut gon", "tach", "task", "cong viec"]):
+    elif not _mentions_any(instruction, [
+        "them", "xoa", "rut gon", "tach", "task", "cong viec",
+        "sua", "doi", "thanh", "arabica", "robusta", "blend", "cafe", "ca phe", "me", "san pham", "loai",
+    ]):
         _require_task_signatures_equal(draft, original)
 
     requested_deadline = _requested_deadline(instruction)
@@ -392,12 +589,6 @@ def _normalize_revise_output(draft: PlanDraftResponse, request: ReviseRequest) -
                     draft.tasks[index].priority = 5
             return draft
 
-    draft.goalTitle = original.goalTitle
-    draft.outputTarget = original.outputTarget
-    draft.deadline = original.deadline
-    draft.priority = original.priority
-    if not _is_task_revision_instruction(instruction):
-        draft.tasks = [task.model_copy(deep=True) for task in original.tasks]
     return draft
 
 
@@ -444,44 +635,6 @@ def _revise_with_safe_rule(request: ReviseRequest) -> PlanDraftResponse | None:
             task.suggestedReason = "Phù hợp vì có nhãn QC/kiểm tra chất lượng."
         draft.tasks.append(task)
         return draft
-
-    added_task_title = _requested_added_task_title(instruction)
-    if added_task_title is not None:
-        draft = original.model_copy(deep=True)
-        task = TaskDraft(
-            title=added_task_title,
-            description=f"Thực hiện công việc {added_task_title.lower()} theo yêu cầu của kế hoạch.",
-            priority=3,
-            workload=1.0,
-        )
-        normalized_title = _normalize_match_text(added_task_title)
-        if _mentions_any(normalized_title, ["van chuyen", "giao hang", "ban giao", "logistics"]):
-            assignee = _find_member_by_labels(
-                {member.userId: member for member in request.members},
-                ["van chuyen", "giao hang", "logistics", "kho", "ship"],
-            )
-            task = _assign_if_found(task, assignee, "Phù hợp vì có nhãn vận chuyển/kho/giao hàng.")
-        draft.tasks.append(task)
-        return draft
-
-    removed_task_query = _requested_removed_task_query(instruction)
-    if removed_task_query is not None:
-        task_index = _find_task_index_by_query(original.tasks, removed_task_query)
-        if task_index is not None:
-            draft = original.model_copy(deep=True)
-            draft.tasks.pop(task_index)
-            return draft
-
-    renamed_task = _requested_renamed_task(instruction)
-    if renamed_task is not None:
-        current_title, new_title = renamed_task
-        task_index = _find_task_index_by_query(original.tasks, current_title)
-        if task_index is not None:
-            draft = original.model_copy(deep=True)
-            task = draft.tasks[task_index]
-            task.title = new_title
-            task.description = f"Thực hiện công việc {new_title.lower()} theo yêu cầu đã cập nhật."
-            return draft
 
     if _mentions_any(instruction, ["tach"]) and _mentions_any(instruction, ["dong goi"]):
         packaging_index = _find_packaging_task_index(original.tasks)
@@ -564,29 +717,17 @@ def _sanitize_production_assignee(task: TaskDraft, allowed_members: dict[str, An
         return _clear_assignee(task, "Chưa có thành viên có nhãn công việc phù hợp.")
 
     text = _normalize_match_text(task_scope_text_for_matching(task))
-    packaging_keywords = ["dong goi", "dan nhan", "bao bi", "pack", "label", "packaging", "thanh pham", "dan tem"]
-    production_keywords = ["rang", "san xuat", "van hanh may", "thuc hien san xuat", "say", "roast", "production", "roasting"]
-    preparation_keywords = ["chuan bi", "so che", "sang loc", "nhan", "kho", "prepar", "green bean", "nhan xanh", "inventory"]
-    grinding_cooling_keywords = ["xay", "nguoi", "grind", "cool", "xay bot", "cooling", "grinding"]
+    packaging_keywords = ["dong goi", "dan nhan", "bao bi", "pack"]
+    production_keywords = ["rang", "san xuat", "van hanh may", "thuc hien san xuat"]
 
     if _has_qc_intent(text):
-        if not _has_matching_label(labels, ["qc", "kiem", "kiem tra", "chat luong", "quality", "cupping", "thu nem", "quality check"]):
+        if not _has_matching_label(labels, ["qc", "kiem", "kiem tra", "chat luong", "quality"]):
             return _clear_assignee(task, "Chưa có thành viên có nhãn QC/kiểm tra chất lượng phù hợp.")
         return task
 
     if any(keyword in text for keyword in packaging_keywords):
         if not any(keyword in labels for keyword in packaging_keywords):
             return _clear_assignee(task, "Chưa có thành viên có nhãn đóng gói phù hợp.")
-        return task
-
-    if any(keyword in text for keyword in preparation_keywords):
-        if not any(keyword in labels for keyword in (preparation_keywords + production_keywords)):
-            return _clear_assignee(task, "Chưa có thành viên có nhãn sơ chế/chuẩn bị/sản xuất phù hợp.")
-        return task
-
-    if any(keyword in text for keyword in grinding_cooling_keywords):
-        if not any(keyword in labels for keyword in (grinding_cooling_keywords + production_keywords)):
-            return _clear_assignee(task, "Chưa có thành viên có nhãn xay/làm nguội/sản xuất phù hợp.")
         return task
 
     if any(keyword in text for keyword in production_keywords):
@@ -602,30 +743,16 @@ def _fill_missing_production_assignee(task: TaskDraft, allowed_members: dict[str
         return task
 
     text = _normalize_match_text(task_scope_text_for_matching(task))
-
-    packaging_keywords = ["dong goi", "dan nhan", "bao bi", "pack", "label", "packaging", "thanh pham", "dan tem"]
-    production_keywords = ["rang", "san xuat", "van hanh may", "thuc hien san xuat", "say", "roast", "production", "roasting"]
-    preparation_keywords = ["chuan bi", "so che", "sang loc", "nhan", "kho", "prepar", "green bean", "nhan xanh", "inventory"]
-    grinding_cooling_keywords = ["xay", "nguoi", "grind", "cool", "xay bot", "cooling", "grinding"]
-
     if _has_qc_intent(text):
-        member = _find_member_by_labels(allowed_members, ["qc", "kiem", "kiem tra", "chat luong", "quality", "cupping", "thu nem", "quality check"])
+        member = _find_member_by_labels(allowed_members, ["qc", "kiem", "kiem tra", "chat luong", "quality"])
         return _assign_if_found(task, member, "Phù hợp vì có nhãn QC/kiểm tra chất lượng.")
 
-    if any(keyword in text for keyword in packaging_keywords):
-        member = _find_member_by_labels(allowed_members, ["dong goi", "bao bi", "pack", "dan nhan", "dan tem", "packaging", "label"])
+    if any(keyword in text for keyword in ["dong goi", "dan nhan", "bao bi", "pack"]):
+        member = _find_member_by_labels(allowed_members, ["dong goi", "bao bi", "pack"])
         return _assign_if_found(task, member, "Phù hợp vì có nhãn đóng gói.")
 
-    if any(keyword in text for keyword in preparation_keywords):
-        member = _find_member_by_labels(allowed_members, ["so che", "chuan bi", "kho", "rang", "san xuat", "inventory"])
-        return _assign_if_found(task, member, "Phù hợp vì có nhãn sơ chế/chuẩn bị/kho/rang.")
-
-    if any(keyword in text for keyword in grinding_cooling_keywords):
-        member = _find_member_by_labels(allowed_members, ["xay", "rang", "san xuat", "grinding", "cooling"])
-        return _assign_if_found(task, member, "Phù hợp vì có nhãn xay/rang/sản xuất.")
-
-    if any(keyword in text for keyword in production_keywords):
-        member = _find_member_by_labels(allowed_members, ["rang", "san xuat", "roast", "production", "roasting"])
+    if any(keyword in text for keyword in ["rang", "san xuat", "van hanh may", "thuc hien san xuat"]):
+        member = _find_member_by_labels(allowed_members, ["rang", "san xuat", "senior"])
         return _assign_if_found(task, member, "Phù hợp vì có nhãn rang/sản xuất.")
 
     return task
@@ -679,100 +806,6 @@ def _requested_task_count(instruction: str) -> int | None:
     if not match:
         return None
     return max(1, int(match.group(1)))
-
-
-def _requested_added_task_title(instruction: str) -> str | None:
-    if "them" not in instruction:
-        return None
-
-    patterns = [
-        r"\bthem(?:\s+\d+)?\s+(?:muc|task|cong viec)(?:\s+nua)?(?:\s+(?:la|ve|cho))?\s*[:\-]?\s*(.+)$",
-        r"\bthem\s+(?:muc|task|cong viec)\s*[:\-]\s*(.+)$",
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, instruction)
-        if not match:
-            continue
-        title = match.group(1).strip(" .,:;-")
-        title = re.sub(r"^(?:muc|task|cong viec)\s*(?:so)?\s*\d+\s*(?:la|:|-)?\s*", "", title).strip()
-        if not title or title in {"nua", "moi", "mot muc", "mot task", "mot cong viec"}:
-            return None
-        return _format_task_title(title)
-    return None
-
-
-def _requested_removed_task_query(instruction: str) -> str | None:
-    patterns = [
-        r"\b(?:xoa|bo|loai bo)(?:\s+di)?\s+(?:muc|task|cong viec)?\s*[:\-]?\s*(.+)$",
-        r"\b(?:xoa|bo)\s+(.+?)\s+(?:di|ra khoi danh sach)$",
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, instruction)
-        if match:
-            query = match.group(1).strip(" .,:;-")
-            if query:
-                return query
-    return None
-
-
-def _requested_renamed_task(instruction: str) -> tuple[str, str] | None:
-    patterns = [
-        r"\b(?:doi ten|sua|doi)\s+(?:muc|task|cong viec)?\s*(.+?)\s+(?:thanh|sang)\s+(.+)$",
-        r"\b(?:muc|task|cong viec)\s+(.+?)\s+(?:doi|sua)\s+(?:thanh|sang)\s+(.+)$",
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, instruction)
-        if not match:
-            continue
-        current_title = match.group(1).strip(" .,:;-")
-        new_title = match.group(2).strip(" .,:;-")
-        if current_title and new_title:
-            return current_title, _format_task_title(new_title)
-    return None
-
-
-def _find_task_index_by_query(tasks: list[TaskDraft], query: str) -> int | None:
-    normalized_query = _normalize_match_text(query)
-    if not normalized_query:
-        return None
-
-    number_match = re.fullmatch(r"(?:muc|task|cong viec)?\s*(?:so)?\s*(\d+)", normalized_query)
-    if number_match:
-        requested_index = int(number_match.group(1)) - 1
-        return requested_index if 0 <= requested_index < len(tasks) else None
-
-    if normalized_query in {"cuoi", "muc cuoi", "task cuoi", "cong viec cuoi"}:
-        return len(tasks) - 1 if tasks else None
-
-    for index, task in enumerate(tasks):
-        if normalized_query in _normalize_match_text(task.title):
-            return index
-    for index, task in enumerate(tasks):
-        if normalized_query in _normalize_match_text(task_scope_text_for_matching(task)):
-            return index
-    return None
-
-
-def _format_task_title(value: str) -> str:
-    normalized = _normalize_match_text(value).strip()
-    known_titles = {
-        "van chuyen": "Vận chuyển",
-        "giao hang": "Giao hàng",
-        "giao hang thanh pham": "Giao hàng thành phẩm",
-        "ban giao": "Bàn giao",
-        "dong goi": "Đóng gói",
-        "kiem tra chat luong": "Kiểm tra chất lượng",
-    }
-    if normalized in known_titles:
-        return known_titles[normalized]
-    return value[0].upper() + value[1:]
-
-
-def _is_task_revision_instruction(instruction: str) -> bool:
-    return _mentions_any(
-        instruction,
-        ["them", "xoa", "bo", "loai bo", "sua", "doi", "tach", "task", "cong viec", "muc"],
-    )
 
 
 def _requested_deadline(instruction: str) -> str | None:
@@ -946,7 +979,7 @@ def _is_generic_product_name(value: Any) -> bool:
     if not isinstance(value, str):
         return False
     normalized = value.strip().lower()
-    return normalized in {"sản phẩm", "cà phê", "hàng", "đơn hàng", "mặt hàng"}
+    return normalized in {"sản phẩm", "hàng", "đơn hàng", "mặt hàng"}
 
 
 def _local_now() -> datetime:
@@ -957,12 +990,54 @@ def _local_now() -> datetime:
 
 
 def _generate_json_object(prompt: str, max_output_tokens: int, error_cls: Type[RuntimeError]) -> dict:
+    token_attempts = [max_output_tokens]
+    retry_tokens = min(max(max_output_tokens * 2, 4096), 16384)
+    if retry_tokens not in token_attempts:
+        token_attempts.append(retry_tokens)
+
+    last_error: RuntimeError | None = None
+    for attempt_index, token_limit in enumerate(token_attempts):
+        attempt_prompt = prompt
+        if attempt_index > 0:
+            attempt_prompt = f"""
+{prompt}
+
+IMPORTANT RETRY INSTRUCTION:
+Your previous response was not valid complete JSON, likely because it was truncated.
+Return exactly one complete JSON object only. Keep descriptions concise enough to fit.
+Do not include markdown, comments, or trailing text.
+""".strip()
+
+        try:
+            return _generate_json_object_once(attempt_prompt, token_limit, error_cls)
+        except error_cls as exc:
+            last_error = exc
+            if not _should_retry_json_generation_error(str(exc)) or attempt_index == len(token_attempts) - 1:
+                raise
+
+    raise last_error or error_cls("Gemini JSON generation failed.")
+
+
+def _generate_json_object_once(prompt: str, max_output_tokens: int, error_cls: Type[RuntimeError]) -> dict:
     provider = settings.ai_provider.replace("-", "_")
     if provider in {"gemini", "gemini_api", "google_ai"}:
         return _generate_json_object_with_gemini_api(prompt, max_output_tokens, error_cls)
     if provider in {"vertex", "vertex_ai"}:
         return _generate_json_object_with_vertex_ai(prompt, max_output_tokens, error_cls)
     raise error_cls(f"Unsupported AI_PROVIDER: {settings.ai_provider}")
+
+
+def _should_retry_json_generation_error(message: str) -> bool:
+    retry_markers = [
+        "output is not json",
+        "output contains invalid json",
+        "unterminated string",
+        "expecting property name",
+        "expecting value",
+        "expecting ',' delimiter",
+    ]
+    normalized = message.lower()
+    return any(marker in normalized for marker in retry_markers)
 
 
 def _generate_json_object_with_gemini_api(prompt: str, max_output_tokens: int, error_cls: Type[RuntimeError]) -> dict:
@@ -977,39 +1052,27 @@ def _generate_json_object_with_gemini_api(prompt: str, max_output_tokens: int, e
             }
         ],
         "generationConfig": {
+            "temperature": 0.1,
+            "topP": 0.8,
             "maxOutputTokens": max_output_tokens,
             "responseMimeType": "application/json",
         },
     }
 
-    url = (
-        "https://generativelanguage.googleapis.com/v1beta/models/"
-        f"{_clean_env_value(settings.gemini_model)}:generateContent"
-    )
-    max_retries = 5
-    for attempt in range(max_retries):
-        try:
-            response = httpx.post(
-                url,
-                params={"key": settings.gemini_api_key},
-                json=payload,
-                timeout=settings.gemini_timeout_seconds,
-            )
-            response.raise_for_status()
-            break
-        except httpx.HTTPStatusError as exc:
-            if exc.response.status_code in {429, 503} and attempt < max_retries - 1:
-                import time
-                time.sleep(2 ** attempt)  # Exponential backoff: 1s, 2s, 4s, 8s...
-                continue
-            body = exc.response.text[:1000]
-            raise error_cls(f"Gemini API returned HTTP {exc.response.status_code}: {body}") from exc
-        except httpx.RequestError as exc:
-            if attempt < max_retries - 1:
-                import time
-                time.sleep(2 ** attempt)
-                continue
-            raise error_cls(f"Cannot reach Gemini API: {exc}") from exc
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{settings.gemini_model}:generateContent"
+    try:
+        response = httpx.post(
+            url,
+            params={"key": settings.gemini_api_key},
+            json=payload,
+            timeout=settings.gemini_timeout_seconds,
+        )
+        response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        body = exc.response.text[:1000]
+        raise error_cls(f"Gemini API returned HTTP {exc.response.status_code}: {body}") from exc
+    except httpx.RequestError as exc:
+        raise error_cls(f"Cannot reach Gemini API: {exc}") from exc
 
     raw_text = _read_gemini_text(response.json(), error_cls)
     return _parse_json_object(raw_text, error_cls)
@@ -1027,6 +1090,8 @@ def _generate_json_object_with_vertex_ai(prompt: str, max_output_tokens: int, er
             }
         ],
         "generationConfig": {
+            "temperature": 0.1,
+            "topP": 0.8,
             "maxOutputTokens": max_output_tokens,
             "responseMimeType": "application/json",
         },
@@ -1115,14 +1180,25 @@ def _parse_json_object(raw_text: str, error_cls: Type[RuntimeError]) -> dict:
     try:
         parsed = json.loads(text)
     except json.JSONDecodeError:
-        match = re.search(r"\{.*\}", text, flags=re.DOTALL)
-        if not match:
-            raise error_cls(f"Gemini output is not JSON: {raw_text[:1000]}")
-        try:
-            parsed = json.loads(match.group(0))
-        except json.JSONDecodeError as exc:
-            raise error_cls(f"Gemini output contains invalid JSON: {raw_text[:1000]}") from exc
+        parsed = None
+        match = re.search(r"\{.*", text, flags=re.DOTALL)
+        if match:
+            candidate = match.group(0).rstrip()
+            candidate = re.sub(r"\s*```$", "", candidate)
+            for suffix in ["", "}", "}\n", "\n}", "}}", "}\n}", "}]}", '"}}', '"}\n}', '"\n}', '}\n}\n}']:
+                try:
+                    parsed = json.loads(candidate + suffix)
+                    break
+                except json.JSONDecodeError:
+                    pass
+        if parsed is None:
+            raise error_cls(f"Gemini output contains invalid JSON: {raw_text[:1000]}")
 
     if not isinstance(parsed, dict):
         raise error_cls("Gemini output must be a JSON object.")
     return parsed
+
+
+
+
+

@@ -22,7 +22,8 @@ import java.util.Map;
  * Keeps the frontend's traffic internal: it always talks to this
  * backend, never directly to the AI service.
  */
-@RestController
+// Disabled: Ver4 RAG conversation proxy was replaced by the stable Ver3 AI workflow.
+// Keep the class source for reference, but do not register it as a Spring controller.
 @RequestMapping("/api/rag")
 @CrossOrigin(origins = "*")
 public class RagConversationController {

@@ -30,6 +30,8 @@ class TeamServiceJoinTest {
         TeamRepository teamRepository = mock(TeamRepository.class);
         TeamMemberRepository teamMemberRepository = mock(TeamMemberRepository.class);
         UserRepository userRepository = mock(UserRepository.class);
+        PlanQuotaService planQuotaService = mock(PlanQuotaService.class);
+        TrustScoreService trustScoreService = mock(TrustScoreService.class);
 
         User owner = User.builder()
                 .id(UUID.randomUUID())
@@ -59,6 +61,8 @@ class TeamServiceJoinTest {
         ReflectionTestUtils.setField(service, "teamRepository", teamRepository);
         ReflectionTestUtils.setField(service, "teamMemberRepository", teamMemberRepository);
         ReflectionTestUtils.setField(service, "userRepository", userRepository);
+        ReflectionTestUtils.setField(service, "planQuotaService", planQuotaService);
+        ReflectionTestUtils.setField(service, "trustScoreService", trustScoreService);
 
         TeamDTO joined = service.joinByCode("abc123", "worker");
 

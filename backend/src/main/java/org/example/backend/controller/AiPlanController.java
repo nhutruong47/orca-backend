@@ -23,7 +23,8 @@ import java.util.UUID;
  *   PATCH  /api/ai-plans/{planId}/status    — change status (DRAFT/APPROVED/...)
  *   POST   /api/ai-plans/{planId}/promote   — mark as PROMOTED, linking to a Goal
  */
-@RestController
+// Disabled: Ver4 persisted AI plans/RAG drafts were replaced by the stable Ver3 AI workflow.
+// Keep the class source for reference, but do not register it as a Spring controller.
 @RequestMapping("/api/ai-plans")
 public class AiPlanController {
 

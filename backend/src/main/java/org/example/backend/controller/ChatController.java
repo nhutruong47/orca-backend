@@ -105,7 +105,7 @@ public class ChatController {
                     "Tin nhắn mới từ " + senderName,
                     preview,
                     "CHAT_MESSAGE",
-                    null
+                    teamId
             );
         }
 

@@ -7,9 +7,18 @@ Intent = Literal["PRODUCTION_PLAN", "OPERATION_TASK", "UNKNOWN"]
 PriorityText = Literal["LOW", "MEDIUM", "HIGH"]
 
 
+class ExtractContext(BaseModel):
+    mode: Literal["WAITING_CLARIFICATION"]
+    originalText: str | None = None
+    intent: Intent | None = None
+    previousFields: dict[str, Any] = Field(default_factory=dict)
+    missingFields: list[str] = Field(default_factory=list)
+
+
 class ExtractRequest(BaseModel):
     teamId: str | None = None
     text: str = Field(min_length=1)
+    context: ExtractContext | None = None
 
 
 class ExtractResponse(BaseModel):
@@ -50,6 +59,8 @@ class PlanDraftResponse(BaseModel):
     deadline: str | None = None
     priority: int = Field(ge=1, le=5)
     tasks: list[TaskDraft]
+    aiNote: str | None = None  # Set when AI cannot process the request; frontend should show this instead of updating draft
+
 
 
 class ReviseRequest(BaseModel):
@@ -57,3 +68,4 @@ class ReviseRequest(BaseModel):
     instruction: str = Field(min_length=1)
     draft: PlanDraftResponse
     members: list[TeamMemberContext] = Field(default_factory=list)
+

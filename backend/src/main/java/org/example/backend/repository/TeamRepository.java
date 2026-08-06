@@ -14,6 +14,8 @@ import java.util.UUID;
 public interface TeamRepository extends JpaRepository<Team, UUID> {
     List<Team> findByOwnerId(UUID ownerId);
 
+    long countByOwnerId(UUID ownerId);
+
     Optional<Team> findByInviteCode(String inviteCode);
 
     @EntityGraph(attributePaths = {"owner"})

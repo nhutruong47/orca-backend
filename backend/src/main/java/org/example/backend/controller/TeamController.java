@@ -31,6 +31,11 @@ public class TeamController {
         return ResponseEntity.ok(teamService.getTeamsForUser(auth.getName()));
     }
 
+    @GetMapping("/quota")
+    public ResponseEntity<?> getMyQuota(Authentication auth) {
+        return ResponseEntity.ok(teamService.getQuotaForUser(auth.getName()));
+    }
+
     @GetMapping("/all")
     public ResponseEntity<List<TeamDTO>> getAllTeams() {
         return ResponseEntity.ok(teamService.getAllTeams());
@@ -40,6 +45,12 @@ public class TeamController {
     public ResponseEntity<?> getTeamDetail(@PathVariable UUID id, @AuthenticationPrincipal User user) {
         accessControlService.requireTeamMember(user, id);
         return ResponseEntity.ok(teamService.getTeamDetail(id));
+    }
+
+    @GetMapping("/{id}/quota")
+    public ResponseEntity<?> getTeamQuota(@PathVariable UUID id, @AuthenticationPrincipal User user) {
+        accessControlService.requireTeamMember(user, id);
+        return ResponseEntity.ok(teamService.getQuotaForTeam(id));
     }
 
     @PostMapping

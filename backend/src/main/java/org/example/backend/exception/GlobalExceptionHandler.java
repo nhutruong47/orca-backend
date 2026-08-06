@@ -58,6 +58,19 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.BAD_REQUEST, "Lỗi nghiệp vụ", ex.getMessage());
     }
 
+    @ExceptionHandler(PlanLimitExceededException.class)
+    public ResponseEntity<Map<String, Object>> handlePlanLimitExceeded(PlanLimitExceededException ex) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("timestamp", LocalDateTime.now().toString());
+        body.put("status", HttpStatus.CONFLICT.value());
+        body.put("error", "PLAN_LIMIT_EXCEEDED");
+        body.put("message", ex.getMessage());
+        body.put("limitType", ex.getLimitType());
+        body.put("current", ex.getCurrent());
+        body.put("limit", ex.getLimit());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+    }
+
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<Map<String, Object>> handleDataIntegrity(DataIntegrityViolationException ex) {
         String detail = ex.getMostSpecificCause().getMessage();

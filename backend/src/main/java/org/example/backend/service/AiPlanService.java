@@ -38,7 +38,8 @@ import java.util.UUID;
  * Lifecycle states: DRAFT, REVISED, APPROVED, REJECTED, PROMOTED, EXPIRED.
  * Allowed transitions are enforced by {@link #isAllowedTransition(String, String)}.
  */
-@Service
+// Disabled: Ver4 persisted AI plans/RAG drafts were replaced by the stable Ver3 AI workflow.
+// Keep the class source for reference, but do not register it as a Spring service.
 @Transactional
 public class AiPlanService {
 

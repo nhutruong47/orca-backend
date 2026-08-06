@@ -1,6 +1,7 @@
 package org.example.backend.service;
 
 import org.example.backend.dto.TeamDTO;
+import org.example.backend.dto.PlanUsageDTO;
 import org.example.backend.entity.*;
 import org.example.backend.repository.TeamMemberRepository;
 import org.example.backend.repository.TeamRepository;
@@ -41,6 +42,9 @@ public class TeamService {
     @Autowired
     private TrustScoreService trustScoreService;
 
+    @Autowired
+    private PlanQuotaService planQuotaService;
+
     /**
      * Lấy tất cả nhóm mà user tham gia
      */
@@ -53,6 +57,20 @@ public class TeamService {
         return memberships.stream()
                 .map(tm -> toDTO(tm.getTeam(), false))
                 .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public PlanUsageDTO getQuotaForUser(String username) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        return planQuotaService.getUsage(user);
+    }
+
+    @Transactional(readOnly = true)
+    public PlanUsageDTO getQuotaForTeam(UUID teamId) {
+        Team team = teamRepository.findById(teamId)
+                .orElseThrow(() -> new RuntimeException("Team not found"));
+        return planQuotaService.getUsage(team);
     }
 
     /**
@@ -83,6 +101,8 @@ public class TeamService {
     public TeamDTO createTeam(TeamDTO dto, String username) {
         User owner = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found"));
+
+        planQuotaService.requireWorkshopSlot(owner);
 
         Team team = new Team();
         team.setName(dto.getName());
@@ -147,6 +167,8 @@ public class TeamService {
                 throw new RuntimeException("Đã là thành viên của nhóm này rồi!");
             }
 
+            planQuotaService.requireMemberSlot(team, member);
+
             TeamMember tm = new TeamMember();
             tm.setTeam(team);
             tm.setUser(member);
@@ -157,6 +179,7 @@ public class TeamService {
                     "status", "ADDED",
                     "message", "Đã thêm " + member.getUsername() + " vào nhóm!");
         } else {
+            planQuotaService.requireMemberCapacity(team);
             String token = jwtUtil.generateInviteToken(email, teamId, "MEMBER");
             String inviteLink = "http://localhost:5173/invite?token=" + token;
             String inviterName = requester.getFullName() != null ? requester.getFullName() : requester.getUsername();
@@ -351,6 +374,8 @@ public class TeamService {
         if (teamMemberRepository.findByTeamIdAndUserId(team.getId(), user.getId()).isPresent()) {
             throw new RuntimeException("Bạn đã là thành viên của nhóm này rồi");
         }
+
+        planQuotaService.requireMemberSlot(team, user);
 
         TeamMember tm = new TeamMember();
         tm.setTeam(team);

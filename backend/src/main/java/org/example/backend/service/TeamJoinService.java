@@ -28,6 +28,7 @@ public class TeamJoinService {
     private final UserRepository userRepo;
     private final TeamMemberRepository teamMemberRepo;
     private final NotificationService notificationService;
+    private final PlanQuotaService planQuotaService;
 
     @Transactional
     public TeamJoinRequestDTO joinByCode(String inviteCode, String username) {
@@ -40,6 +41,8 @@ public class TeamJoinService {
         if (teamMemberRepo.findByTeamIdAndUserId(team.getId(), user.getId()).isPresent()) {
             throw new RuntimeException("Bạn đã là thành viên của nhóm này rồi");
         }
+
+        planQuotaService.requireMemberSlot(team, user);
 
         if (joinRepo.findByTeamIdAndUserIdAndStatus(team.getId(), user.getId(), "PENDING").isPresent()) {
             throw new RuntimeException("Bạn đã gửi yêu cầu và đang chờ duyệt");
@@ -93,7 +96,12 @@ public class TeamJoinService {
             throw new RuntimeException("Only owner can make decision");
         }
 
-        req.setStatus(decisionReq.getDecision().toUpperCase());
+        String decision = decisionReq.getDecision().toUpperCase();
+        if ("APPROVED".equals(decision)) {
+            planQuotaService.requireMemberSlot(req.getTeam(), req.getUser());
+        }
+
+        req.setStatus(decision);
         joinRepo.save(req);
 
         if ("APPROVED".equals(req.getStatus())) {

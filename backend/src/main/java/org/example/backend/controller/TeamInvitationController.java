@@ -10,6 +10,7 @@ import org.example.backend.repository.TeamRepository;
 import org.example.backend.repository.UserRepository;
 import org.example.backend.security.JwtUtil;
 import org.example.backend.service.EmailService;
+import org.example.backend.service.PlanQuotaService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -38,6 +39,9 @@ public class TeamInvitationController {
         @Autowired
         private EmailService emailService;
 
+        @Autowired
+        private PlanQuotaService planQuotaService;
+
         @PostMapping("/{teamId}/invite")
         public ResponseEntity<?> inviteMember(@PathVariable UUID teamId,
                         @RequestBody Map<String, String> payload,
@@ -50,6 +54,11 @@ public class TeamInvitationController {
 
                 Team team = teamRepository.findById(teamId)
                                 .orElseThrow(() -> new RuntimeException("Team not found"));
+
+                userRepository.findByEmail(email)
+                                .ifPresentOrElse(
+                                                user -> planQuotaService.requireMemberSlot(team, user),
+                                                () -> planQuotaService.requireMemberCapacity(team));
 
                 // Generate invitation token
                 String token = jwtUtil.generateInviteToken(email, teamId, roleStr);
@@ -88,6 +97,8 @@ public class TeamInvitationController {
                         return ResponseEntity.badRequest()
                                         .body(Map.of("error", "User is already a member of this team"));
                 }
+
+                planQuotaService.requireMemberSlot(team, user);
 
                 TeamMember tm = new TeamMember();
                 tm.setTeam(team);

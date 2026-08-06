@@ -13,7 +13,6 @@ import org.example.backend.repository.TeamRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.server.ResponseStatusException;
@@ -23,7 +22,6 @@ import java.util.List;
 import java.util.UUID;
 
 @Service
-@Transactional
 public class AiWorkflowService {
 
     private final TeamMemberRepository teamMemberRepository;
@@ -64,13 +62,13 @@ public class AiWorkflowService {
         try {
             T response = restTemplate.postForObject(aiServiceUrl + path, body, responseType);
             if (response == null) {
-                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "AI service returned empty response");
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Dịch vụ AI phản hồi rỗng, vui lòng thử lại sau.");
             }
             return response;
         } catch (ResponseStatusException e) {
             throw e;
         } catch (RestClientException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Cannot reach AI service: " + e.getMessage(), e);
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Dịch vụ AI đang gián đoạn tạm thời. Vui lòng thử lại sau.", e);
         }
     }
 

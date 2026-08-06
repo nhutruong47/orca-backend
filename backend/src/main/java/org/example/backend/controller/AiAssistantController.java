@@ -28,7 +28,8 @@ import java.util.Map;
  * backend, never directly to the AI service. Authentication, AI usage
  * limits, and CORS are enforced here.
  */
-@RestController
+// Disabled: Ver4 RAG assistant was replaced by the stable Ver3 AI workflow.
+// Keep the class source for reference, but do not register it as a Spring controller.
 @RequestMapping("/api/ai/assistant")
 public class AiAssistantController {
 

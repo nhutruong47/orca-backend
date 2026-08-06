@@ -9,6 +9,8 @@ public class AiPlanDraftResponse {
     private String deadline;
     private Integer priority;
     private List<AiTaskDraft> tasks = new ArrayList<>();
+    private String aiNote;
+
 
     public String getGoalTitle() {
         return goalTitle;
@@ -49,4 +51,13 @@ public class AiPlanDraftResponse {
     public void setTasks(List<AiTaskDraft> tasks) {
         this.tasks = tasks;
     }
+
+    public String getAiNote() {
+        return aiNote;
+    }
+
+    public void setAiNote(String aiNote) {
+        this.aiNote = aiNote;
+    }
 }
+
