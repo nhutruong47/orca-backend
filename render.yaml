@@ -21,12 +21,14 @@ services:
     autoDeploy: true
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11.0
+        value: 3.11.9
       - key: AI_V2_MODE
         value: gemini
       - key: AI_PROVIDER
-        value: gemini
+        value: gemini_api
       - key: GEMINI_MODEL
         value: gemini-3.5-flash
+      - key: GEMINI_TIMEOUT_SECONDS
+        value: "90"
       - key: GEMINI_API_KEY
         sync: false
