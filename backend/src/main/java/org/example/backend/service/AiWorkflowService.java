@@ -48,14 +48,20 @@ public class AiWorkflowService {
         UUID teamId = requireTeamId(request != null ? request.getTeamId() : null);
         validateTeamAccess(teamId, currentUser);
         request.setMembers(loadTeamMembers(teamId));
-        return post("/plan", request, AiPlanDraftResponse.class);
+        AiPlanDraftResponse response = post("/plan", request, AiPlanDraftResponse.class);
+        validateDraftResponse(response);
+        return response;
     }
 
     public AiPlanDraftResponse revise(AiReviseRequest request, User currentUser) {
         UUID teamId = requireTeamId(request != null ? request.getTeamId() : null);
         validateTeamAccess(teamId, currentUser);
         request.setMembers(loadTeamMembers(teamId));
-        return post("/revise", request, AiPlanDraftResponse.class);
+        AiPlanDraftResponse response = post("/revise", request, AiPlanDraftResponse.class);
+        if (response.getAiNote() == null || response.getAiNote().isBlank()) {
+            validateDraftResponse(response);
+        }
+        return response;
     }
 
     private <T> T post(String path, Object body, Class<T> responseType) {
@@ -69,6 +75,15 @@ public class AiWorkflowService {
             throw e;
         } catch (RestClientException e) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Dịch vụ AI đang gián đoạn tạm thời. Vui lòng thử lại sau.", e);
+        }
+    }
+
+    private void validateDraftResponse(AiPlanDraftResponse response) {
+        if (response.getTasks() == null || response.getTasks().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Dịch vụ AI phản hồi dữ liệu không hợp lệ (không có công việc). Vui lòng thử lại.");
+        }
+        if (response.getGoalTitle() == null || response.getGoalTitle().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Dịch vụ AI phản hồi dữ liệu không hợp lệ (thiếu tiêu đề). Vui lòng thử lại.");
         }
     }
 
