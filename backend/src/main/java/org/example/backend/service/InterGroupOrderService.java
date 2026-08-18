@@ -134,6 +134,14 @@ public class InterGroupOrderService {
             Team sellerTeam = teamRepo.findById(UUID.fromString(dto.getSellerTeamId()))
                     .orElseThrow(() -> new RuntimeException("Seller team not found"));
 
+            // Trust check for personal user
+            if (currentUser.getTotalOrders() >= 3) {
+                int trustScore = trustScoreService.calculate(currentUser);
+                if (trustScore < 40 && dto.getQuantity() != null && dto.getQuantity() > 50) {
+                    throw new RuntimeException("Uy tín quá thấp (" + trustScore + "%). Bạn chỉ được phép đặt hàng với số lượng nhỏ (tối đa 50).");
+                }
+            }
+
             InterGroupOrder order = new InterGroupOrder();
             order.setBuyerUser(currentUser);
             order.setSellerTeam(sellerTeam);
@@ -180,11 +188,11 @@ public class InterGroupOrderService {
             throw new RuntimeException("Only the team owner can place inter-group orders.");
         }
 
-        // Trust check: block if trust score < 30% and has >= 3 orders
+        // Trust check for team: block if trust score < 40% and quantity > 50
         if (buyerTeam.getTotalOrders() >= 3) {
             int trustScore = trustScoreService.calculate(buyerTeam);
-            if (trustScore < 30) {
-                throw new RuntimeException("Uy tín quá thấp (" + trustScore + "%). Không thể đặt hàng.");
+            if (trustScore < 40 && dto.getQuantity() != null && dto.getQuantity() > 50) {
+                throw new RuntimeException("Uy tín quá thấp (" + trustScore + "%). Bạn chỉ được phép đặt hàng với số lượng nhỏ (tối đa 50).");
             }
         }
 

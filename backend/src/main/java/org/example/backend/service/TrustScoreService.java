@@ -60,13 +60,17 @@ public class TrustScoreService {
         return completedVsCancelled(user.getCompletedOrders(), user.getCancelledOrders());
     }
 
-    /**
-     * Tính từ bộ đếm trực tiếp, dùng cho cả 2 entity.
-     */
     public int completedVsCancelled(int completed, int cancelled) {
         int total = completed + cancelled;
         if (total <= 0) return -1;
-        return (int) Math.round((double) completed / total * 100);
+        
+        int score = 100 - (cancelled * 20) + (completed * 10);
+        
+        // Capped at 100% and minimum 0%
+        if (score > 100) return 100;
+        if (score < 0) return 0;
+        
+        return score;
     }
 
     // ===== Mutators (counter++) — luôn chạy trong transaction riêng =====
