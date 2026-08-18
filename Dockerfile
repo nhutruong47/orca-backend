@@ -1,8 +1,15 @@
-# Render builds this repository from the root. Since building Spring Boot inside 
-# Render's 512MB RAM Docker container is extremely slow, we copy the locally 
-# compiled JAR directly to achieve instant deployments.
+# Stage 1: Build the backend with Maven
+FROM maven:3.9.6-eclipse-temurin-21-alpine AS build
+WORKDIR /app
+# Copy the pom.xml and source code
+COPY pom.xml .
+COPY src ./src
+# Build the application without running tests for faster deployment
+RUN mvn clean package -DskipTests
+
+# Stage 2: Run the built JAR
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
-COPY app-bin/app.jar app.jar
+COPY --from=build /app/target/*.jar app.jar
 EXPOSE 8080
 ENTRYPOINT ["java", "-XX:+UseSerialGC", "-XX:MaxRAMPercentage=75.0", "-Dspring.profiles.active=prod", "-Dserver.port=8080", "-jar", "app.jar"]

@@ -54,3 +54,7 @@ server_log.txt
 
 ### VS Code ###
 .vscode/
+
+*.class
+*.log
+*.jar
