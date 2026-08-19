@@ -2,8 +2,8 @@
 FROM maven:3.9.6-eclipse-temurin-21-alpine AS build
 WORKDIR /app
 # Copy the pom.xml and source code
-COPY pom.xml .
-COPY src ./src
+COPY backend/pom.xml .
+COPY backend/src ./src
 # Build the application without running tests for faster deployment
 RUN mvn clean package -DskipTests
 
