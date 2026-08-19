@@ -717,12 +717,18 @@ def _sanitize_production_assignee(task: TaskDraft, allowed_members: dict[str, An
         return _clear_assignee(task, "Chưa có thành viên có nhãn công việc phù hợp.")
 
     text = _normalize_match_text(task_scope_text_for_matching(task))
+    preparation_keywords = ["chuan bi", "phan loai", "so che", "chon", "nhat"]
     packaging_keywords = ["dong goi", "dan nhan", "bao bi", "pack"]
     production_keywords = ["rang", "san xuat", "van hanh may", "thuc hien san xuat"]
 
     if _has_qc_intent(text):
         if not _has_matching_label(labels, ["qc", "kiem", "kiem tra", "chat luong", "quality"]):
             return _clear_assignee(task, "Chưa có thành viên có nhãn QC/kiểm tra chất lượng phù hợp.")
+        return task
+
+    if any(keyword in text for keyword in preparation_keywords):
+        if not any(keyword in labels for keyword in preparation_keywords):
+            return _clear_assignee(task, "Chưa có thành viên có nhãn chuẩn bị/phân loại phù hợp.")
         return task
 
     if any(keyword in text for keyword in packaging_keywords):
@@ -746,6 +752,10 @@ def _fill_missing_production_assignee(task: TaskDraft, allowed_members: dict[str
     if _has_qc_intent(text):
         member = _find_member_by_labels(allowed_members, ["qc", "kiem", "kiem tra", "chat luong", "quality"])
         return _assign_if_found(task, member, "Phù hợp vì có nhãn QC/kiểm tra chất lượng.")
+
+    if any(keyword in text for keyword in ["chuan bi", "phan loai", "so che", "chon", "nhat"]):
+        member = _find_member_by_labels(allowed_members, ["chuan bi", "phan loai", "so che"])
+        return _assign_if_found(task, member, "Phù hợp vì có nhãn chuẩn bị/phân loại.")
 
     if any(keyword in text for keyword in ["dong goi", "dan nhan", "bao bi", "pack"]):
         member = _find_member_by_labels(allowed_members, ["dong goi", "bao bi", "pack"])
