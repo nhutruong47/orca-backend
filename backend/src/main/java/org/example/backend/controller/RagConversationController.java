@@ -25,7 +25,7 @@ import java.util.Map;
 // Disabled: Ver4 RAG conversation proxy was replaced by the stable Ver3 AI workflow.
 // Keep the class source for reference, but do not register it as a Spring controller.
 @RequestMapping("/api/rag")
-@CrossOrigin(origins = "*")
+
 public class RagConversationController {
 
     private static final Logger logger = LoggerFactory.getLogger(RagConversationController.class);

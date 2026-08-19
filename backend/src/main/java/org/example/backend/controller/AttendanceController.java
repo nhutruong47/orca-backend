@@ -16,7 +16,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/attendance")
-@CrossOrigin("*")
+
 public class AttendanceController {
 
     private final AttendanceService attendanceService;

@@ -15,7 +15,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/production/plans")
-@CrossOrigin("*")
+
 public class ProductionPlanController {
 
     private final ProductionPlanService planService;

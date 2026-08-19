@@ -16,7 +16,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/production/board")
-@CrossOrigin("*")
+
 public class ProductionBoardController {
 
     private final ProductionBoardService boardService;

@@ -14,7 +14,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/production/dashboard")
-@CrossOrigin("*")
+
 public class FactoryDashboardController {
 
     private final FactoryDashboardService dashboardService;

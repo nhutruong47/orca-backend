@@ -12,7 +12,7 @@ import java.time.LocalDate;
 
 @RestController
 @RequestMapping("/api/payroll")
-@CrossOrigin("*")
+
 public class PayrollController {
 
     private final UserRepository userRepository;
